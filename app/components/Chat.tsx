@@ -12,6 +12,7 @@ interface ChatMessage {
 interface ChatProps {
   apiKey: string;
   onModelInfoChange?: (modelInfo: ModelInfo | null) => void;
+  runSqlQuery: boolean;
 }
 
 // Type for SQL query result
@@ -41,7 +42,7 @@ const estimateTokenCount = (text: string): number => {
 };
 
 
-const Chat = ({ apiKey, onModelInfoChange }: ChatProps) => {
+const Chat = ({ apiKey, onModelInfoChange, runSqlQuery }: ChatProps) => {
   // State declarations grouped by functionality
   // UI states
   const [input, setInput] = useState('');
@@ -121,34 +122,36 @@ order by 4
     setInput(''); // Clear input field
     
     try {
-      // Step 1: Fetch SQL results and enhance the message
+      // Step 1: Fetch SQL results and enhance the message (only if runSqlQuery is true)
       let enhancedMessage = userMessage.content;
       let sqlData: SqlQueryResult | null = null;
       
-      setIsLoadingSql(true);
-      try {
-        // Execute SQL query with user message content
-        sqlData = await fetchSqlResults(userMessage.content);
-        setSqlResults(sqlData);
-        
-        // No need for replacement in the simple query
-        const sqlQuery = SQL_QUERY_TEMPLATE;
-        
-        // Format the results and enhance the message
-        const formattedResults = JSON.stringify(sqlData, null, 2);
-        enhancedMessage = `${userMessage.content}\n\nSQL Results (${sqlQuery}):\n${formattedResults}`;
-        
-        // Log debug information
-        const estimatedTokens = estimateTokenCount(enhancedMessage);
-        console.log('Message preview:', userMessage.content.slice(0, 50), '...');
-        console.log('Message size with SQL results:', enhancedMessage.length, 'chars,', estimatedTokens, 'tokens (estimated)');
-        
-        // No additional truncation needed with command-r-plus model (128K token limit)
-      } catch (sqlError) {
-        console.error('Failed to fetch SQL results:', sqlError);
-        // Continue with the original message if SQL fetch fails
-      } finally {
-        setIsLoadingSql(false);
+      if (runSqlQuery) {
+        setIsLoadingSql(true);
+        try {
+          // Execute SQL query with user message content
+          sqlData = await fetchSqlResults(userMessage.content);
+          setSqlResults(sqlData);
+          
+          // No need for replacement in the simple query
+          const sqlQuery = SQL_QUERY_TEMPLATE;
+          
+          // Format the results and enhance the message
+          const formattedResults = JSON.stringify(sqlData, null, 2);
+          enhancedMessage = `${userMessage.content}\n\nSQL Results (${sqlQuery}):\n${formattedResults}`;
+          
+          // Log debug information
+          const estimatedTokens = estimateTokenCount(enhancedMessage);
+          console.log('Message preview:', userMessage.content.slice(0, 50), '...');
+          console.log('Message size with SQL results:', enhancedMessage.length, 'chars,', estimatedTokens, 'tokens (estimated)');
+          
+          // No additional truncation needed with command-r-plus model (128K token limit)
+        } catch (sqlError) {
+          console.error('Failed to fetch SQL results:', sqlError);
+          // Continue with the original message if SQL fetch fails
+        } finally {
+          setIsLoadingSql(false);
+        }
       }
       
       // Step 2: Send message to Cohere API
@@ -230,9 +233,13 @@ order by 4
             <span className="font-semibold">{modelInfo.name}</span>
             {modelInfo.description && <span className="ml-2 text-gray-500">({modelInfo.description})</span>}
           </div>
-          <div>
-            <span className="mr-2">SQL Query:</span>
-            <code className="bg-gray-200 px-1 py-0.5 rounded">{SQL_QUERY_TEMPLATE}</code>
+          <div className="flex items-center">
+            <span className={`mr-2 px-2 py-0.5 rounded-full text-xs ${runSqlQuery ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+              SQL Queries: {runSqlQuery ? 'Enabled' : 'Disabled'}
+            </span>
+            {runSqlQuery && (
+              <code className="bg-gray-200 px-1 py-0.5 rounded">{SQL_QUERY_TEMPLATE}</code>
+            )}
           </div>
         </div>
       )}
@@ -244,8 +251,14 @@ order by 4
             <div className="text-center text-gray-500">
               <h2 className="text-xl font-semibold mb-2">Welcome to React NextJS Chat App</h2>
               <p>Start a conversation by typing a message below.</p>
-              <p className="mt-2 text-sm">SQL Query: <code>{SQL_QUERY_TEMPLATE}</code></p>
-              <p className="text-xs">Results will be automatically appended to your messages.</p>
+              {runSqlQuery ? (
+                <>
+                  <p className="mt-2 text-sm">SQL Query: <code>{SQL_QUERY_TEMPLATE}</code></p>
+                  <p className="text-xs">Results will be automatically appended to your messages.</p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm">SQL Queries are disabled. Messages will be sent directly to the AI.</p>
+              )}
             </div>
           </div>
         ) : (
@@ -271,7 +284,7 @@ order by 4
         
         {/* Progress indicators */}
         <div className="space-y-2">
-          {isLoadingSql && (
+          {isLoadingSql && runSqlQuery && (
             <div className="flex justify-start">
               <div className="bg-blue-100 text-blue-800 rounded-lg px-4 py-2 max-w-md">
                 <div className="flex items-center mb-1">

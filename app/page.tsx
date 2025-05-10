@@ -13,6 +13,7 @@ interface ModelInfo {
 export default function Home() {
   const [apiKey, setApiKey] = useState<string>('');
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  const [runSqlQuery, setRunSqlQuery] = useState<boolean>(true);
 
   const handleApiKeyChange = (newApiKey: string) => {
     setApiKey(newApiKey);
@@ -22,12 +23,18 @@ export default function Home() {
     setModelInfo(newModelInfo);
   };
 
+  const handleRunSqlQueryChange = (newRunSqlQuery: boolean) => {
+    setRunSqlQuery(newRunSqlQuery);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar on the left */}
       <Sidebar 
         onApiKeyChange={handleApiKeyChange} 
         modelInfo={modelInfo}
+        runSqlQuery={runSqlQuery}
+        onRunSqlQueryChange={handleRunSqlQueryChange}
       />
       
       {/* Chat area on the right */}
@@ -35,6 +42,7 @@ export default function Home() {
         <Chat 
           apiKey={apiKey} 
           onModelInfoChange={handleModelInfoChange}
+          runSqlQuery={runSqlQuery}
         />
       </div>
     </div>

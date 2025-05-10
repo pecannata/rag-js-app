@@ -11,9 +11,11 @@ interface ModelInfo {
 interface SidebarProps {
   onApiKeyChange: (apiKey: string) => void;
   modelInfo: ModelInfo | null;
+  runSqlQuery: boolean;
+  onRunSqlQueryChange: (runSqlQuery: boolean) => void;
 }
 
-const Sidebar = ({ onApiKeyChange, modelInfo }: SidebarProps) => {
+const Sidebar = ({ onApiKeyChange, modelInfo, runSqlQuery, onRunSqlQueryChange }: SidebarProps) => {
   const [apiKey, setApiKey] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [apiKeyStatus, setApiKeyStatus] = useState<'not-set' | 'set' | 'invalid'>('not-set');
@@ -157,6 +159,28 @@ const Sidebar = ({ onApiKeyChange, modelInfo }: SidebarProps) => {
             )}
           </div>
         )}
+      </div>
+      
+      {/* SQL Query Settings Section */}
+      <div className="mb-6">
+        <h2 className="text-sm font-medium mb-2">SQL Query Settings</h2>
+        <div className="bg-gray-100 p-3 rounded-md border border-gray-200">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={runSqlQuery}
+              onChange={(e) => onRunSqlQueryChange(e.target.checked)}
+              className="form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm">Run SQL Queries</span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1">
+            {runSqlQuery 
+              ? "SQL query results will be included with each message"
+              : "SQL queries are disabled, using direct AI responses only"
+            }
+          </p>
+        </div>
       </div>
       
       {/* Model Information Section */}
