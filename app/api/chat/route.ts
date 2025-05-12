@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CohereClient } from 'cohere-ai';
+import { getCohereModel } from '../../langchain/models';
+import { createRagChain } from '../../langchain/chains';
+import { createSqlQueryTool } from '../../langchain/tools';
 
 // Define types for request body
 interface ChatRequestBody {
@@ -9,6 +12,7 @@ interface ChatRequestBody {
     role: 'USER' | 'CHATBOT';
     message: string;
   }[];
+  runSqlQuery?: boolean;
 }
 
 // Cohere model configuration
@@ -64,7 +68,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body = await request.json() as ChatRequestBody;
-    const { message, apiKey, chatHistory = [] } = body;
+    const { message, apiKey, chatHistory = [], runSqlQuery = true } = body;
     
     // Validate the API key format
     if (!isValidCohereApiKey(apiKey)) {
@@ -86,48 +90,49 @@ export async function POST(request: NextRequest) {
         : message
     );
     console.log('Chat history length:', chatHistory.length);
+    console.log('Using Cohere model:', SELECTED_MODEL);
     
-    // No truncation needed with command-r-plus model which has a 128K token context window
-    // Using the full message with complete SQL results for better analysis
-    let processedMessage = message;
+    // Create the Cohere model with LangChain
+    const model = getCohereModel(apiKey, SELECTED_MODEL);
     
-    // Note: The truncation seen in the console log above is ONLY for display purposes
-    // The complete message is being sent to the LLM without any truncation
-
-    // Initialize Cohere client with the provided API key
-    const cohere = new CohereClient({
-      token: apiKey,
+    // Create SQL Tool - this is where we maintain existing Oracle connection
+    const fetchSql = async (query: string) => {
+      // This function calls our existing SQL API
+      try {
+        const encodedQuery = encodeURIComponent(query);
+        const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/sql?query=${encodedQuery}`);
+        if (!response.ok) {
+          throw new Error(`SQL query failed: ${response.statusText}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error('Error in SQL query:', error);
+        throw error;
+      }
+    };
+    
+    const sqlTool = createSqlQueryTool(fetchSql);
+    
+    // Create the RAG chain with SQL integration
+    const chain = createRagChain(model, sqlTool, runSqlQuery);
+    
+    // Execute the chain
+    const result = await chain.invoke({
+      query: message
     });
-
-    // Call Cohere chat API with increased maxTokens to handle the SQL data
-    console.log('Sending chat request to Cohere API...');
-    console.log(`Estimated total tokens in request: ~${estimateTokenCount(processedMessage)}`);
     
-    // Log which model we're using
-    console.log(`Using Cohere model: ${SELECTED_MODEL} (${COHERE_MODELS[SELECTED_MODEL].description})`);
+    console.log('Received response from LangChain');
     
-    const cohereResponse = await cohere.chat({
-      message: processedMessage, // Use the processed message (potentially truncated)
-      chatHistory,
-      model: SELECTED_MODEL,  // Using the selected Cohere model
-      temperature: 0.7,
-      maxTokens: MAX_TOKENS,
-    });
-    
-    console.log('Received response from Cohere API');
-
     // Log the response (truncate if too long)
-    console.log('Cohere response:', 
-      cohereResponse.text.length > 500 
-        ? cohereResponse.text.substring(0, 200) + '...[truncated]...' + cohereResponse.text.substring(cohereResponse.text.length - 200) 
-        : cohereResponse.text
+    console.log('LangChain response:', 
+      result.length > 500 
+        ? result.substring(0, 200) + '...[truncated]...' + result.substring(result.length - 200) 
+        : result
     );
     
     // Return the response with model information
     return NextResponse.json({
-      response: cohereResponse.text,
-      // Include any additional data from Cohere's response that might be useful
-      citations: cohereResponse.citations || [],
+      response: result,
       model: SELECTED_MODEL,
     });
   } catch (error) {

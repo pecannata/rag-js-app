@@ -163,14 +163,15 @@ order by 4
         message: msg.content
       }));
       
-      // Call API with the enhanced message
+      // Call API with the message and runSqlQuery parameter
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          message: enhancedMessage, 
+          message: userMessage.content, // No longer need to enhance the message here
           apiKey,
-          chatHistory
+          chatHistory,
+          runSqlQuery // Add runSqlQuery parameter
         })
       });
       
