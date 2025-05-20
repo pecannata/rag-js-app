@@ -71,7 +71,6 @@ const SQL_QUERY_TEMPLATE_VECTOR = `
 `;
 
 const SQL_QUERY_TEMPLATE = `
-select * from emp
 `;
 
   // Function to fetch SQL query results
