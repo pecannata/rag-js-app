@@ -71,12 +71,7 @@ const SQL_QUERY_TEMPLATE_VECTOR = `
 `;
 
 const SQL_QUERY_TEMPLATE = `
-with q1 as (select lstat, medv, 
-            ROUND(PREDICTION(BOSTON_GLM_REGRESSION_MODEL USING lstat, medv), 1) AS predict_mdev
-            FROM BOSTON_TRAIN_TEST where train_test = \'test\')
-select q1.*, predict_mdev - medv as diff
-from q1
-order by 4
+select * from emp
 `;
 
   // Function to fetch SQL query results
@@ -171,8 +166,8 @@ order by 4
           message: userMessage.content, // User's original message 
           apiKey,
           chatHistory,
-          // Only set runSqlQuery to true if the message is not empty
-          runSqlQuery: runSqlQuery && userMessage.content.trim() !== '', // Ensure SQL only runs for non-empty messages
+          // Only set runSqlQuery to true if the message is not empty and SQL template is not empty
+          runSqlQuery: runSqlQuery && userMessage.content.trim() !== '' && SQL_QUERY_TEMPLATE.trim() !== '', // Don't run SQL if template is empty
           // Pass the predefined SQL query so that chains.ts has a valid SQL query to execute
           sqlQuery: SQL_QUERY_TEMPLATE
         })
@@ -288,7 +283,7 @@ order by 4
         
         {/* Progress indicators */}
         <div className="space-y-2">
-          {isLoadingSql && runSqlQuery && (
+          {isLoadingSql && runSqlQuery && SQL_QUERY_TEMPLATE.trim() !== '' && (
             <div className="flex justify-start">
               <div className="bg-blue-100 text-blue-800 rounded-lg px-4 py-2 max-w-md">
                 <div className="flex items-center mb-1">

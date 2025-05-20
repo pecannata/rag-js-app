@@ -31,9 +31,9 @@ export const createRagChain = (model, sqlTool, runSqlQuery = true) => {
           return "SQL queries are disabled.";
         }
         
-        // Skip SQL query execution if the input query is empty or whitespace-only
-        if (!input.query || input.query.trim() === '') {
-          return "No SQL query was executed because the input query is empty.";
+        // Skip SQL query execution if either the input query or sqlQuery is empty or whitespace-only
+        if (!input.query || input.query.trim() === '' || !input.sqlQuery || input.sqlQuery.trim() === '') {
+          return "No SQL query was executed because the query template is empty.";
         }
         
         try {
