@@ -8,11 +8,15 @@ import { createSqlQueryTool } from '../../langchain/tools';
 interface ChatRequestBody {
   message: string;
   apiKey: string;
-  chatHistory?: {
-    role: 'USER' | 'CHATBOT';
-    message: string;
-  }[];
+  chatHistory?: ChatMessage[];
   runSqlQuery?: boolean;
+  sqlQuery?: string;
+}
+
+// Interface for chat messages
+interface ChatMessage {
+  role: string;
+  message: string;
 }
 
 // Cohere model configuration
@@ -68,7 +72,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body = await request.json() as ChatRequestBody;
-    const { message, apiKey, chatHistory = [], runSqlQuery = true } = body;
+    const { message, apiKey, chatHistory = [], runSqlQuery = true, sqlQuery = "" } = body;
     
     // Validate the API key format
     if (!isValidCohereApiKey(apiKey)) {
@@ -118,7 +122,8 @@ export async function POST(request: NextRequest) {
     
     // Execute the chain
     const result = await chain.invoke({
-      query: message
+      query: message,
+      sqlQuery: sqlQuery // Pass the predefined SQL query to chains.ts
     });
     
     console.log('Received response from LangChain');

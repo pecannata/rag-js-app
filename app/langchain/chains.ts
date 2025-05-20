@@ -31,18 +31,17 @@ export const createRagChain = (model, sqlTool, runSqlQuery = true) => {
           return "SQL queries are disabled.";
         }
         
+        // Skip SQL query execution if the input query is empty or whitespace-only
+        if (!input.query || input.query.trim() === '') {
+          return "No SQL query was executed because the input query is empty.";
+        }
+        
         try {
-          // Use the SQL_QUERY_TEMPLATE from the application
-          const sqlQuery = `
-with q1 as (select lstat, medv, 
-            ROUND(PREDICTION(BOSTON_GLM_REGRESSION_MODEL USING lstat, medv), 1) AS predict_mdev
-            FROM BOSTON_TRAIN_TEST where train_test = 'test')
-select q1.*, predict_mdev - medv as diff
-from q1
-order by 4
-`;
+          // Use the SQL query provided by Chat.tsx
+          // This avoids executing user input as SQL directly
+          const sqlQuery = input.sqlQuery || input.query;
           const results = await sqlTool.invoke(sqlQuery);
-          return `SQL Results (${sqlQuery}):\n${results}`;
+          return `SQL Results:\n${results}`;
         } catch (error) {
           console.error('Error executing SQL query:', error);
           return "Error fetching SQL results.";

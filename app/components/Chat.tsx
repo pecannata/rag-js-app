@@ -168,10 +168,13 @@ order by 4
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          message: userMessage.content, // No longer need to enhance the message here
+          message: userMessage.content, // User's original message 
           apiKey,
           chatHistory,
-          runSqlQuery // Add runSqlQuery parameter
+          // Only set runSqlQuery to true if the message is not empty
+          runSqlQuery: runSqlQuery && userMessage.content.trim() !== '', // Ensure SQL only runs for non-empty messages
+          // Pass the predefined SQL query so that chains.ts has a valid SQL query to execute
+          sqlQuery: SQL_QUERY_TEMPLATE
         })
       });
       
