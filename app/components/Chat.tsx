@@ -97,12 +97,15 @@ const SQL_QUERY_TEMPLATE_VECTOR = `
             FETCH FIRST 2 ROWS ONLY
 `;
 
+// Possible queries
+// select * from emp
 const SQL_QUERY_TEMPLATE = `
 select * from emp
 `;
 
+// Possible queries
 // Which four teams are leading the MLB and what are their records.
-const SERP_API_QUERY = "";
+const SERP_API_QUERY = "Which four teams are leading the MLB and what are their records.";
 
   // Function to fetch SQL query results
   const fetchSqlResults = async (userInput: string): Promise<SqlQueryResult> => {
@@ -223,8 +226,8 @@ const SERP_API_QUERY = "";
         }
       }
       
-      // Fetch SerpAPI results if API key is provided
-      if (serpApiKey && runSerpApi) {
+      // Fetch SerpAPI results if API key is provided and SERP_API_QUERY is not empty
+      if (serpApiKey && runSerpApi && SERP_API_QUERY.trim() !== '') {
         setIsLoadingSerpApi(true);
         try {
           // Execute SerpAPI query
