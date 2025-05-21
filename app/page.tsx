@@ -12,11 +12,17 @@ interface ModelInfo {
 
 export default function Home() {
   const [apiKey, setApiKey] = useState<string>('');
+  const [serpApiKey, setSerpApiKey] = useState<string>('');
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
   const [runSqlQuery, setRunSqlQuery] = useState<boolean>(true);
+  const [includeOrganicResults, setIncludeOrganicResults] = useState<boolean>(false); // Default to excluding organic results
 
   const handleApiKeyChange = (newApiKey: string) => {
     setApiKey(newApiKey);
+  };
+
+  const handleSerpApiKeyChange = (newSerpApiKey: string) => {
+    setSerpApiKey(newSerpApiKey);
   };
 
   const handleModelInfoChange = (newModelInfo: ModelInfo | null) => {
@@ -27,22 +33,31 @@ export default function Home() {
     setRunSqlQuery(newRunSqlQuery);
   };
 
+  const handleIncludeOrganicResultsChange = (newIncludeOrganicResults: boolean) => {
+    setIncludeOrganicResults(newIncludeOrganicResults);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar on the left */}
       <Sidebar 
-        onApiKeyChange={handleApiKeyChange} 
+        onApiKeyChange={handleApiKeyChange}
+        onSerpApiKeyChange={handleSerpApiKeyChange}
         modelInfo={modelInfo}
         runSqlQuery={runSqlQuery}
         onRunSqlQueryChange={handleRunSqlQueryChange}
+        includeOrganicResults={includeOrganicResults}
+        onIncludeOrganicResultsChange={handleIncludeOrganicResultsChange}
       />
       
       {/* Chat area on the right */}
       <div className="flex-1 overflow-hidden">
         <Chat 
-          apiKey={apiKey} 
+          apiKey={apiKey}
+          serpApiKey={serpApiKey}
           onModelInfoChange={handleModelInfoChange}
           runSqlQuery={runSqlQuery}
+          includeOrganicResults={includeOrganicResults}
         />
       </div>
     </div>

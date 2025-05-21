@@ -11,12 +11,36 @@ interface ChatMessage {
 
 interface ChatProps {
   apiKey: string;
+  serpApiKey?: string;
   onModelInfoChange?: (modelInfo: ModelInfo | null) => void;
   runSqlQuery: boolean;
+  includeOrganicResults?: boolean;
 }
 
 // Type for SQL query result
 interface SqlQueryResult {
+  [key: string]: any;
+}
+
+// Type for SerpAPI query result
+interface SerpApiResult {
+  organic_results?: Array<{
+    position?: number;
+    title?: string;
+    link?: string;
+    snippet?: string;
+    displayed_link?: string;
+  }>;
+  answer_box?: {
+    title?: string;
+    answer?: string;
+    snippet?: string;
+  };
+  knowledge_graph?: {
+    title?: string;
+    description?: string;
+  };
+  error?: string;
   [key: string]: any;
 }
 
@@ -42,7 +66,7 @@ const estimateTokenCount = (text: string): number => {
 };
 
 
-const Chat = ({ apiKey, onModelInfoChange, runSqlQuery }: ChatProps) => {
+const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrganicResults = false }: ChatProps) => {
   // State declarations grouped by functionality
   // UI states
   const [input, setInput] = useState('');
@@ -51,11 +75,14 @@ const Chat = ({ apiKey, onModelInfoChange, runSqlQuery }: ChatProps) => {
   
   // Loading states
   const [isLoadingSql, setIsLoadingSql] = useState(false);
+  const [isLoadingSerpApi, setIsLoadingSerpApi] = useState(false);
   const [isLoadingLlm, setIsLoadingLlm] = useState(false);
   
   // Data states
   const [sqlResults, setSqlResults] = useState<SqlQueryResult | null>(null);
+  const [serpApiResults, setSerpApiResults] = useState<SerpApiResult | null>(null);
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  const [runSerpApi, setRunSerpApi] = useState<boolean>(true);
 
   // Scroll to the bottom of the chat when messages update
   useEffect(() => {
@@ -72,6 +99,8 @@ const SQL_QUERY_TEMPLATE_VECTOR = `
 
 const SQL_QUERY_TEMPLATE = `
 `;
+
+const SERP_API_QUERY = "Which four teams are leading the MLB and what are their records.";
 
   // Function to fetch SQL query results
   const fetchSqlResults = async (userInput: string): Promise<SqlQueryResult> => {
@@ -103,6 +132,47 @@ const SQL_QUERY_TEMPLATE = `
     }
   };
 
+  // Function to fetch SerpAPI query results
+  const fetchSerpApiResults = async (): Promise<SerpApiResult> => {
+    try {
+      // Use the hard-coded SERP_API_QUERY constant 
+      const query = SERP_API_QUERY;
+      
+      // Encode the query for URL usage
+      const encodedQuery = encodeURIComponent(query);
+      
+      // Add the API key and includeOrganic parameter to the request
+      const params = new URLSearchParams();
+      params.append('query', encodedQuery);
+      if (serpApiKey) {
+        params.append('api_key', serpApiKey);
+      }
+      
+      // Pass the includeOrganicResults setting to control whether organic results are included
+      params.append('includeOrganic', includeOrganicResults.toString());
+      console.log(`Fetching SerpAPI results with includeOrganic=${includeOrganicResults}`);
+      
+      // Append all parameters to the endpoint URL
+      const response = await fetch(`/api/serpapi?${params.toString()}`);
+      
+      if (!response.ok) {
+        // Handle HTTP errors
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.error || 
+          `Failed to fetch SerpAPI results: ${response.status} ${response.statusText}`
+        );
+      }
+      
+      const data = await response.json();
+      console.log('SerpAPI query results:', JSON.stringify(data, null, 2));
+      return data;
+    } catch (error) {
+      console.error('Error fetching SerpAPI results:', error);
+      throw error;
+    }
+  };
+
   // Handle form submission and process the chat flow
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,10 +186,12 @@ const SQL_QUERY_TEMPLATE = `
     setInput(''); // Clear input field
     
     try {
-      // Step 1: Fetch SQL results and enhance the message (only if runSqlQuery is true)
+      // Step 1: Fetch SQL and/or SerpAPI results and enhance the message
       let enhancedMessage = userMessage.content;
       let sqlData: SqlQueryResult | null = null;
+      let serpApiData: SerpApiResult | null = null;
       
+      // Fetch SQL results if enabled
       if (runSqlQuery) {
         setIsLoadingSql(true);
         try {
@@ -148,6 +220,67 @@ const SQL_QUERY_TEMPLATE = `
         }
       }
       
+      // Fetch SerpAPI results if API key is provided
+      if (serpApiKey && runSerpApi) {
+        setIsLoadingSerpApi(true);
+        try {
+          // Execute SerpAPI query
+          serpApiData = await fetchSerpApiResults();
+          setSerpApiResults(serpApiData);
+          
+          // Format the results and enhance the message with JSON data
+          if (serpApiData) {
+            // Format the SerpAPI results as JSON and append to the enhanced message
+            // This replaces the previous text formatting with raw JSON data
+            const serpApiJson = JSON.stringify(serpApiData, null, 2);
+            enhancedMessage += `\n\nSerpAPI JSON Results (Query: "${SERP_API_QUERY}"):\n${serpApiJson}`;
+            
+            // Log debug information
+            const estimatedTokens = estimateTokenCount(enhancedMessage);
+            console.log('Message size with SerpAPI JSON results:', enhancedMessage.length, 'chars,', estimatedTokens, 'tokens (estimated)');
+            
+            // Also keep the human-readable format for display purposes in UI
+            const serpApiInfo = [];
+            
+            // Format organic search results for UI display
+            if (serpApiData.organic_results && serpApiData.organic_results.length > 0) {
+              serpApiInfo.push('Top Search Results:');
+              serpApiData.organic_results.slice(0, 3).forEach((result, index) => {
+                serpApiInfo.push(`${index + 1}. ${result.title || 'Unknown'}`);
+                if (result.snippet) serpApiInfo.push(`   ${result.snippet}`);
+                if (result.link) serpApiInfo.push(`   Source: ${result.link}`);
+              });
+            }
+            
+            // Format answer box if present (for UI display only)
+            if (serpApiData.answer_box) {
+              serpApiInfo.push('\nDirect Answer:');
+              if (serpApiData.answer_box.title) serpApiInfo.push(serpApiData.answer_box.title);
+              if (serpApiData.answer_box.answer) serpApiInfo.push(serpApiData.answer_box.answer);
+              if (serpApiData.answer_box.snippet) serpApiInfo.push(serpApiData.answer_box.snippet);
+            }
+            
+            // Format knowledge graph if present (for UI display only)
+            if (serpApiData.knowledge_graph) {
+              serpApiInfo.push('\nKnowledge Graph:');
+              if (serpApiData.knowledge_graph.title) serpApiInfo.push(`Title: ${serpApiData.knowledge_graph.title}`);
+              if (serpApiData.knowledge_graph.description) serpApiInfo.push(serpApiData.knowledge_graph.description);
+            }
+            
+            // Store formatted results for UI display (but don't add to enhancedMessage since we're using JSON)
+            if (serpApiInfo.length > 0) {
+              const formattedSerpResults = serpApiInfo.join('\n');
+              console.log('Human-readable SerpAPI results (for UI only):', formattedSerpResults);
+            }
+          }
+        } catch (serpApiError) {
+          console.error('Failed to fetch SerpAPI results:', serpApiError);
+          // Continue with the original message if SerpAPI fetch fails
+        } finally {
+          setIsLoadingSerpApi(false);
+        }
+      }
+      
       // Step 2: Send message to Cohere API
       setIsLoadingLlm(true);
       
@@ -162,7 +295,9 @@ const SQL_QUERY_TEMPLATE = `
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          message: userMessage.content, // User's original message 
+          // Send the enhanced message that includes SQL and SerpAPI JSON results
+          // This ensures the LLM receives both the user query and the SerpAPI data
+          message: enhancedMessage, 
           apiKey,
           chatHistory,
           // Only set runSqlQuery to true if the message is not empty and SQL template is not empty
@@ -196,10 +331,14 @@ const SQL_QUERY_TEMPLATE = `
       }
       
       // Add bot response to chat
+      // The LLM has now processed both the user query and the SerpAPI JSON data
       setMessages(prev => [
         ...prev, 
         { role: 'bot', content: data.response }
       ]);
+      
+      // Log that we've sent the enhanced message with JSON results to the LLM
+      console.log('Sent enhanced message to LLM with SerpAPI JSON data included');
     } catch (error) {
       console.error('Error sending message:', error);
       
@@ -211,6 +350,7 @@ const SQL_QUERY_TEMPLATE = `
     } finally {
       // Reset all loading states
       setIsLoadingSql(false);
+      setIsLoadingSerpApi(false);
       setIsLoadingLlm(false);
     }
   }; // Close handleSubmit function
@@ -231,13 +371,16 @@ const SQL_QUERY_TEMPLATE = `
             <span className="font-semibold">{modelInfo.name}</span>
             {modelInfo.description && <span className="ml-2 text-gray-500">({modelInfo.description})</span>}
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center space-x-2">
             <span className={`mr-2 px-2 py-0.5 rounded-full text-xs ${runSqlQuery ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
               SQL Queries: {runSqlQuery ? 'Enabled' : 'Disabled'}
             </span>
             {runSqlQuery && (
               <code className="bg-gray-200 px-1 py-0.5 rounded">{SQL_QUERY_TEMPLATE}</code>
             )}
+            <span className={`px-2 py-0.5 rounded-full text-xs ${serpApiKey ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
+              SerpAPI: {serpApiKey ? 'Enabled' : 'Disabled'}
+            </span>
           </div>
         </div>
       )}
@@ -300,6 +443,24 @@ const SQL_QUERY_TEMPLATE = `
             </div>
           )}
           
+          {isLoadingSerpApi && serpApiKey && (
+            <div className="flex justify-start">
+              <div className="bg-teal-100 text-teal-800 rounded-lg px-4 py-2 max-w-md">
+                <div className="flex items-center mb-1">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-teal-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="font-medium">Querying SerpAPI Search...</span>
+                </div>
+                <div className="w-full bg-teal-200 rounded-full h-1.5">
+                  <div className="bg-teal-600 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                </div>
+                <p className="text-xs mt-1">Executing query: "{SERP_API_QUERY}"</p>
+              </div>
+            </div>
+          )}
+          
           {isLoadingLlm && (
             <div className="flex justify-start">
               <div className="bg-purple-100 text-purple-800 rounded-lg px-4 py-2 max-w-md">
@@ -329,12 +490,12 @@ const SQL_QUERY_TEMPLATE = `
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
-            disabled={(isLoadingSql || isLoadingLlm) || !apiKey}
+            disabled={(isLoadingSql || isLoadingSerpApi || isLoadingLlm) || !apiKey}
             className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
           />
           <button
             type="submit"
-            disabled={!input.trim() || (isLoadingSql || isLoadingLlm) || !apiKey}
+            disabled={!input.trim() || (isLoadingSql || isLoadingSerpApi || isLoadingLlm) || !apiKey}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-400"
           >
             Send
@@ -342,7 +503,7 @@ const SQL_QUERY_TEMPLATE = `
           <button
             type="button"
             onClick={resetChat}
-            disabled={(isLoadingSql || isLoadingLlm) || messages.length === 0}
+            disabled={(isLoadingSql || isLoadingSerpApi || isLoadingLlm) || messages.length === 0}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:bg-gray-100 disabled:text-gray-400"
           >
             Reset

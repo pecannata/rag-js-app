@@ -10,25 +10,51 @@ interface ModelInfo {
 
 interface SidebarProps {
   onApiKeyChange: (apiKey: string) => void;
+  onSerpApiKeyChange: (apiKey: string) => void;
   modelInfo: ModelInfo | null;
   runSqlQuery: boolean;
   onRunSqlQueryChange: (runSqlQuery: boolean) => void;
+  includeOrganicResults?: boolean;
+  onIncludeOrganicResultsChange: (includeOrganicResults: boolean) => void;
 }
 
-const Sidebar = ({ onApiKeyChange, modelInfo, runSqlQuery, onRunSqlQueryChange }: SidebarProps) => {
+const Sidebar = ({ 
+  onApiKeyChange, 
+  onSerpApiKeyChange, 
+  modelInfo, 
+  runSqlQuery, 
+  onRunSqlQueryChange,
+  includeOrganicResults = false, // Default to excluding organic results
+  onIncludeOrganicResultsChange
+}: SidebarProps) => {
+  // Cohere API key state
   const [apiKey, setApiKey] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [apiKeyStatus, setApiKeyStatus] = useState<'not-set' | 'set' | 'invalid'>('not-set');
+  
+  // SerpAPI key state
+  const [serpApiKey, setSerpApiKey] = useState<string>('');
+  const [isEditingSerpApi, setIsEditingSerpApi] = useState<boolean>(false);
+  const [serpApiKeyStatus, setSerpApiKeyStatus] = useState<'not-set' | 'set' | 'invalid'>('not-set');
 
-  // Load API key from localStorage on component mount
+  // Load API keys from localStorage on component mount
   useEffect(() => {
+    // Load Cohere API key
     const storedApiKey = localStorage.getItem('cohereApiKey');
     if (storedApiKey) {
       setApiKey(storedApiKey);
       onApiKeyChange(storedApiKey);
       setApiKeyStatus('set');
     }
-  }, [onApiKeyChange]);
+    
+    // Load SerpAPI key
+    const storedSerpApiKey = localStorage.getItem('serpApiKey');
+    if (storedSerpApiKey) {
+      setSerpApiKey(storedSerpApiKey);
+      onSerpApiKeyChange(storedSerpApiKey);
+      setSerpApiKeyStatus('set');
+    }
+  }, [onApiKeyChange, onSerpApiKeyChange]);
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -67,6 +93,46 @@ const Sidebar = ({ onApiKeyChange, modelInfo, runSqlQuery, onRunSqlQueryChange }
     onApiKeyChange('');
     setApiKeyStatus('not-set');
     setIsEditing(true);
+  };
+  
+  // SerpAPI key handlers
+  const handleSerpApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSerpApiKey(value);
+    
+    // Basic validation for SerpAPI key
+    if (value && value.length < 20) {
+      setSerpApiKeyStatus('invalid');
+    } else if (value) {
+      setSerpApiKeyStatus('set');
+    } else {
+      setSerpApiKeyStatus('not-set');
+    }
+  };
+
+  const saveSerpApiKey = () => {
+    if (serpApiKey && serpApiKey.length >= 20) {
+      // Save to localStorage
+      localStorage.setItem('serpApiKey', serpApiKey);
+      
+      // Notify parent component
+      onSerpApiKeyChange(serpApiKey);
+      
+      // Update UI state
+      setIsEditingSerpApi(false);
+      setSerpApiKeyStatus('set');
+    }
+  };
+
+  const clearSerpApiKey = () => {
+    // Clear from localStorage
+    localStorage.removeItem('serpApiKey');
+    
+    // Clear state
+    setSerpApiKey('');
+    onSerpApiKeyChange('');
+    setSerpApiKeyStatus('not-set');
+    setIsEditingSerpApi(true);
   };
 
   return (
@@ -160,6 +226,92 @@ const Sidebar = ({ onApiKeyChange, modelInfo, runSqlQuery, onRunSqlQueryChange }
           </div>
         )}
       </div>
+
+      {/* SerpAPI Key Section */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-medium">SerpAPI Key</h2>
+          {serpApiKeyStatus === 'set' && !isEditingSerpApi && (
+            <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+              <span className="w-2 h-2 mr-1 rounded-full bg-green-500"></span>
+              Active
+            </span>
+          )}
+        </div>
+        
+        {isEditingSerpApi ? (
+          <div>
+            <input
+              type="password"
+              value={serpApiKey}
+              onChange={handleSerpApiKeyChange}
+              placeholder="Enter your SerpAPI key"
+              className={`w-full p-2 text-sm border rounded-md focus:outline-none focus:ring-2 ${
+                serpApiKeyStatus === 'invalid' 
+                  ? 'border-red-300 focus:ring-red-500' 
+                  : 'border-gray-300 focus:ring-blue-500'
+              }`}
+            />
+            
+            {serpApiKeyStatus === 'invalid' && (
+              <p className="mt-1 text-xs text-red-600">API key seems too short</p>
+            )}
+            
+            <div className="flex space-x-2 mt-3">
+              <button
+                onClick={saveSerpApiKey}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Save
+              </button>
+              
+              <button
+                onClick={() => setIsEditingSerpApi(false)}
+                className="px-3 py-1.5 text-xs bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {serpApiKeyStatus === 'set' ? (
+              <div className="flex flex-col space-y-2">
+                <div className="flex items-center">
+                  <div className="w-full bg-gray-200 p-2 rounded-md">
+                    <p className="text-sm font-mono">
+                      {serpApiKey.substring(0, 4)}...{serpApiKey.substring(serpApiKey.length - 4)}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setIsEditingSerpApi(true)}
+                    className="px-3 py-1.5 text-xs bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    Edit
+                  </button>
+                  
+                  <button
+                    onClick={clearSerpApiKey}
+                    className="px-3 py-1.5 text-xs bg-red-100 text-red-800 rounded-md hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsEditingSerpApi(true)}
+                className="w-full p-2 text-sm bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Add API Key
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       
       {/* SQL Query Settings Section */}
       <div className="mb-6">
@@ -178,6 +330,28 @@ const Sidebar = ({ onApiKeyChange, modelInfo, runSqlQuery, onRunSqlQueryChange }
             {runSqlQuery 
               ? "SQL query results will be included with each message"
               : "SQL queries are disabled, using direct AI responses only"
+            }
+          </p>
+        </div>
+      </div>
+      
+      {/* SerpAPI Settings Section */}
+      <div className="mb-6">
+        <h2 className="text-sm font-medium mb-2">SerpAPI Settings</h2>
+        <div className="bg-gray-100 p-3 rounded-md border border-gray-200">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeOrganicResults}
+              onChange={(e) => onIncludeOrganicResultsChange(e.target.checked)}
+              className="form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm">Include Organic Results</span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1">
+            {includeOrganicResults 
+              ? "Organic search results will be included in SerpAPI data"
+              : "Organic search results will be excluded from SerpAPI data (reduces token usage)"
             }
           </p>
         </div>
@@ -220,6 +394,19 @@ const Sidebar = ({ onApiKeyChange, modelInfo, runSqlQuery, onRunSqlQueryChange }
         >
           Get one from Cohere dashboard →
         </a>
+        <div className="mt-2">
+          <p className="text-xs text-gray-500 mb-2">
+            Need a SerpAPI key?
+          </p>
+          <a
+            href="https://serpapi.com/dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Get one from SerpAPI dashboard →
+          </a>
+        </div>
       </div>
     </div>
   );
