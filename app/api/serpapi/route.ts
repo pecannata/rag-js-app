@@ -29,7 +29,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     
     // If a query parameter is provided, use it. Otherwise, use the hardcoded query from Chat.tsx
-    const query = searchParams.get('query') || "Who were the British kings and when did their reign begin";
+    const query = searchParams.get('query');
+    
+    // Require a query parameter - do not use a hardcoded fallback
+    if (!query || query.trim() === '') {
+      console.error('ERROR: No search query provided');
+      return NextResponse.json(
+        { error: 'No search query provided. Please include a "query" parameter in your request.' },
+        { status: 400 }
+      );
+    }
     
     // Get API key from query parameters or environment variable
     const apiKey = searchParams.get('api_key') || process.env.SERPAPI_KEY;

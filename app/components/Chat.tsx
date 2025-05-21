@@ -84,14 +84,6 @@ const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrgan
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
   const [runSerpApi, setRunSerpApi] = useState<boolean>(true);
 
-  // Automatically disable SerpAPI if SERP_API_QUERY is empty
-  useEffect(() => {
-    if (!SERP_API_QUERY || SERP_API_QUERY.trim() === '') {
-      console.log('SerpAPI automatically disabled: SERP_API_QUERY is empty');
-      setRunSerpApi(false);
-    }
-  }, []);
-
   // Scroll to the bottom of the chat when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -106,10 +98,10 @@ const SQL_QUERY_TEMPLATE_VECTOR = `
 `;
 
 const SQL_QUERY_TEMPLATE = `
+select * from emp
 `;
 
-// Define your search query here. If empty, SerpAPI functionality will be automatically disabled.
-// To enable SerpAPI searches, set this to a non-empty string (e.g., "climate change facts")
+// Which four teams are leading the MLB and what are their records.
 const SERP_API_QUERY = "";
 
   // Function to fetch SQL query results
@@ -143,19 +135,13 @@ const SERP_API_QUERY = "";
   };
 
   // Function to fetch SerpAPI query results
-  const fetchSerpApiResults = async (userQuery: string): Promise<SerpApiResult> => {
+  const fetchSerpApiResults = async (): Promise<SerpApiResult> => {
     try {
-      console.log(`Preparing to query SerpAPI with: "${userQuery}"`);
-      
-      // Validate the query
-      if (!userQuery || userQuery.trim() === '') {
-        const error = 'No search query provided to SerpAPI';
-        console.error(`⛔ ${error}`);
-        throw new Error(error);
-      }
+      // Use the hard-coded SERP_API_QUERY constant 
+      const query = SERP_API_QUERY;
       
       // Encode the query for URL usage
-      const encodedQuery = encodeURIComponent(userQuery);
+      const encodedQuery = encodeURIComponent(query);
       
       // Add the API key and includeOrganic parameter to the request
       const params = new URLSearchParams();
@@ -236,15 +222,12 @@ const SERP_API_QUERY = "";
         }
       }
       
-      // Fetch SerpAPI results if API key is provided, runSerpApi is true, and SERP_API_QUERY is not empty
-      const serpApiEnabled = serpApiKey && runSerpApi && SERP_API_QUERY.trim() !== '';
-      console.log(`SerpAPI status: ${serpApiEnabled ? 'ENABLED' : 'DISABLED'} (API Key: ${serpApiKey ? 'Yes' : 'No'}, runSerpApi: ${runSerpApi}, Query Empty: ${SERP_API_QUERY.trim() === ''})`);
-      
-      if (serpApiEnabled) {
+      // Fetch SerpAPI results if API key is provided
+      if (serpApiKey && runSerpApi) {
         setIsLoadingSerpApi(true);
         try {
-          // Execute SerpAPI query with the predefined SERP_API_QUERY, not user message
-          serpApiData = await fetchSerpApiResults(SERP_API_QUERY);
+          // Execute SerpAPI query
+          serpApiData = await fetchSerpApiResults();
           setSerpApiResults(serpApiData);
           
           // Format the results and enhance the message with JSON data
@@ -397,20 +380,8 @@ const SERP_API_QUERY = "";
             {runSqlQuery && (
               <code className="bg-gray-200 px-1 py-0.5 rounded">{SQL_QUERY_TEMPLATE}</code>
             )}
-            <span className={`px-2 py-0.5 rounded-full text-xs ${
-              serpApiKey && SERP_API_QUERY.trim() !== '' && runSerpApi 
-                ? 'bg-blue-100 text-blue-800' 
-                : 'bg-gray-100 text-gray-500'
-            }`}>
-              SerpAPI: {
-                !serpApiKey 
-                  ? 'Disabled (No API Key)' 
-                  : !SERP_API_QUERY.trim() 
-                    ? 'Disabled (Empty Query)' 
-                    : !runSerpApi 
-                      ? 'Disabled' 
-                      : 'Enabled'
-              }
+            <span className={`px-2 py-0.5 rounded-full text-xs ${serpApiKey ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
+              SerpAPI: {serpApiKey ? 'Enabled' : 'Disabled'}
             </span>
           </div>
         </div>
