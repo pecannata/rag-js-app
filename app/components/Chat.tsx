@@ -126,7 +126,8 @@ const SERP_API_QUERY = "";
       }
       
       const data = await response.json();
-      console.log('SQL query results:', JSON.stringify(data, null, 2));
+      // SQL results are already logged in the SQL route, so we don't log them again here
+      console.log('SQL query completed successfully');
       return data;
     } catch (error) {
       console.error('Error fetching SQL results:', error);
@@ -208,10 +209,10 @@ const SERP_API_QUERY = "";
           const formattedResults = JSON.stringify(sqlData, null, 2);
           enhancedMessage = `${userMessage.content}\n\nSQL Results (${sqlQuery}):\n${formattedResults}`;
           
-          // Log debug information
+          // Log debug information (without duplicating SQL results)
           const estimatedTokens = estimateTokenCount(enhancedMessage);
           console.log('Message preview:', userMessage.content.slice(0, 50), '...');
-          console.log('Message size with SQL results:', enhancedMessage.length, 'chars,', estimatedTokens, 'tokens (estimated)');
+          console.log(`SQL results retrieved and appended to message (${enhancedMessage.length} chars, ~${estimatedTokens} tokens)`);
           
           // No additional truncation needed with command-r-plus model (128K token limit)
         } catch (sqlError) {
@@ -239,7 +240,7 @@ const SERP_API_QUERY = "";
             
             // Log debug information
             const estimatedTokens = estimateTokenCount(enhancedMessage);
-            console.log('Message size with SerpAPI JSON results:', enhancedMessage.length, 'chars,', estimatedTokens, 'tokens (estimated)');
+            console.log('Message size with SerpAPI JSON results added:', enhancedMessage.length, 'chars,', estimatedTokens, 'tokens (estimated) - SQL results not displayed again');
             
             // Also keep the human-readable format for display purposes in UI
             const serpApiInfo = [];

@@ -31,6 +31,12 @@ export const createRagChain = (model, sqlTool, runSqlQuery = true) => {
           return "SQL queries are disabled.";
         }
         
+        // Check if the message already contains SQL results
+        if (input.query && input.query.includes("SQL Results")) {
+          console.log("SQL results already included in the message. Skipping SQL query execution.");
+          return "SQL results are already included in your message.";
+        }
+        
         // Skip SQL query execution if either the input query or sqlQuery is empty or whitespace-only
         if (!input.query || input.query.trim() === '' || !input.sqlQuery || input.sqlQuery.trim() === '') {
           return "No SQL query was executed because the query template is empty.";
