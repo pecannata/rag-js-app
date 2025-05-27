@@ -100,12 +100,12 @@ const SQL_QUERY_TEMPLATE_VECTOR = `
 // Possible queries
 // select * from emp
 const SQL_QUERY_TEMPLATE = `
-select * from emp
+
 `;
 
 // Possible queries
-// Which four teams are leading the MLB and what are their records.
-const SERP_API_QUERY = "Which four teams are leading the MLB and what are their records.";
+// How many game wins and game losses does each of the top four teams leading the MLB have this year?.
+const SERP_API_QUERY = "How many game wins and game losses does each of the top four teams leading the MLB have this year?";
 
   // Function to fetch SQL query results
   const fetchSqlResults = async (userInput: string): Promise<SqlQueryResult> => {
