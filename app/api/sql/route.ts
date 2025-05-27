@@ -9,11 +9,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('query');
     
-    // Check if query parameter is provided
+    // Check if query parameter is provided or empty after trimming
     if (!query) {
       console.warn('No SQL query provided in request');
       return NextResponse.json({ 
         error: 'No SQL query provided' 
+      }, { status: 400 });
+    }
+    
+    // Check if query is empty after trimming
+    if (query.trim() === '') {
+      console.warn('Empty SQL query provided in request');
+      return NextResponse.json({ 
+        error: 'SQL query cannot be empty' 
       }, { status: 400 });
     }
     
