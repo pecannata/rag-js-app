@@ -11,6 +11,7 @@ interface ChatRequestBody {
   runSqlQuery?: boolean;
   sqlQuery?: string;
   serpApiKey?: string;
+  serpApiQuery?: string; // Add serpApiQuery parameter to handle hardcoded SerpAPI query from client
 }
 
 // Interface for chat messages
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body = await request.json() as ChatRequestBody;
-    const { message, apiKey, chatHistory = [], runSqlQuery = true, sqlQuery = "", serpApiKey } = body;
+    const { message, apiKey, chatHistory = [], runSqlQuery = true, sqlQuery = "", serpApiKey, serpApiQuery = "" } = body;
     
     // Validate the API key format
     if (!isValidCohereApiKey(apiKey)) {
@@ -139,13 +140,19 @@ export async function POST(request: NextRequest) {
     console.log("🚀 Using LangGraph workflow for intelligent tool selection");
     console.log("🔧 Available tools: Calculator, SQL" + (serpApiKey ? ", SerpAPI" : ""));
     
+    // Log the SerpAPI query if available
+    if (serpApiKey && serpApiQuery) {
+      console.log("🔍 SerpAPI query available:", serpApiQuery.substring(0, 100) + (serpApiQuery.length > 100 ? "..." : ""));
+    }
+    
     // Create the agent chain with LangGraph enabled (passing true as the last parameter)
     const chain = createAgentChain(model, sqlTool, serpApiKey || "", true);
     
     // Execute the workflow - it will automatically select the appropriate tool
     const result = await chain.invoke({
       query: message,
-      sqlQuery: sqlQuery // Pass the predefined SQL query to chains.ts
+      sqlQuery: sqlQuery, // Pass the predefined SQL query to chains.ts
+      serpApiQuery: serpApiQuery // Pass the hardcoded SerpAPI query from client
     });
     
     console.log('Received response from LangGraph workflow');

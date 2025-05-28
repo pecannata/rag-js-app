@@ -521,28 +521,55 @@ export const createReactAgent = (
 
 // Create a tool that wraps the SerpAPI for use with the agent (kept for compatibility)
 export const createSerpApiAgentTool = (fetchSerpApiResults: (query: string) => Promise<any>) => {
-  return new DynamicStructuredTool({
+  // Create a more flexible tool using Tool instead of DynamicStructuredTool
+  // This avoids the strict schema validation
+  return {
     name: "serpapi",
     description: "Searches the web for up-to-date information.",
-    schema: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The search query to look up on the web"
-        }
-      },
-      required: ["query"]
-    },
-    func: async ({ query }) => {
+    invoke: async (input: any) => {
       try {
+        // Handle different input formats
+        let query: string;
+        
+        // Input is a string directly
+        if (typeof input === 'string') {
+          try {
+            // Try to parse as JSON if it's a stringified object
+            const parsedInput = JSON.parse(input);
+            if (parsedInput && typeof parsedInput === 'object' && parsedInput.query) {
+              query = parsedInput.query;
+              console.log("🔍 SerpAPI extracted query from JSON string:", query);
+            } else {
+              // If parsing succeeded but no query property, use the input as is
+              query = input;
+              console.log("🔍 SerpAPI using string input directly:", query);
+            }
+          } catch (e) {
+            // Not JSON, use as is
+            query = input;
+            console.log("🔍 SerpAPI using string input:", query);
+          }
+        }
+        // Input is an object with query property
+        else if (typeof input === 'object' && input !== null && input.query) {
+          query = input.query;
+          console.log("🔍 SerpAPI extracted query from object:", query);
+        }
+        // Fall back to string conversion
+        else {
+          query = String(input);
+          console.log("🔍 SerpAPI converted input to string:", query);
+        }
+        
+        // Execute the search with the extracted query
         const result = await fetchSerpApiResults(query);
         return JSON.stringify(result, null, 2);
       } catch (error) {
+        console.error("❌ SerpAPI error:", error);
         return `Error searching the web: ${error}`;
       }
     }
-  });
+  };
 };
 
 /**

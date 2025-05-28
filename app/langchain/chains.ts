@@ -72,27 +72,65 @@ export const createRagChain = (model, sqlTool, runSqlQuery = true) => {
 // Function to create a SerpAPI tool adapter for the ReAct agent
 const createSerpApiToolAdapter = (serpApiKey) => {
   // Function to fetch SerpAPI results (simplified for agent use)
-  const fetchSerpApiResults = async (query) => {
+  const fetchSerpApiResults = async (input) => {
     try {
-      // Encode the query for URL usage
-      const encodedQuery = encodeURIComponent(query);
-      
-      // Add the API key parameter
-      const params = new URLSearchParams();
-      params.append('query', encodedQuery);
-      if (serpApiKey) {
-        params.append('api_key', serpApiKey);
+      // Handle different input formats (string or object with query property)
+      let query = input;
+
+      // Check if input is a stringified JSON object
+      if (typeof input === 'string') {
+        try {
+          const parsedInput = JSON.parse(input);
+          if (parsedInput && typeof parsedInput === 'object' && parsedInput.query) {
+            query = parsedInput.query;
+            console.log("🔍 Extracted query from JSON string:", query);
+          }
+        } catch (e) {
+          // Input is a regular string, not JSON - use it directly
+          console.log("🔍 Using direct string query");
+        }
+      } else if (typeof input === 'object' && input !== null && input.query) {
+        // Input is already an object with a query property
+        query = input.query;
+        console.log("🔍 Extracted query from object:", query);
       }
+
+      // Log the final query being used
+      console.log("🔍 SerpAPI executing query:", query);
       
-      // Make request to the SerpAPI route
-      const response = await fetch(`/api/serpapi?${params.toString()}`);
+      try {
+        // Create URL parameters in a way that works on server-side
+        const params = new URLSearchParams();
+        params.set('query', query);
+        if (serpApiKey) {
+          params.set('api_key', serpApiKey);
+        }
+        
+        // In server-side environment, we need an absolute URL with protocol
+        // We can use a base URL that works in both server and client environments
+        const baseUrl = process.env.VERCEL_URL 
+            ? `https://${process.env.VERCEL_URL}` 
+            : 'http://localhost:3001';
+            
+        const urlString = `${baseUrl}/api/serpapi?${params.toString()}`;
+        console.log("🔍 Using URL:", urlString);
+        
+        // Make request to the SerpAPI route with properly constructed URL string
+        const response = await fetch(urlString, {
+          // Ensure we handle redirects properly
+          redirect: 'follow'
+        });
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch SerpAPI results: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch SerpAPI results: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error('Error fetching SerpAPI results:', error);
+        throw error;
       }
-      
-      const data = await response.json();
-      return data;
     } catch (error) {
       console.error('Error fetching SerpAPI results:', error);
       throw error;
@@ -156,17 +194,25 @@ export const createToolSelectionWorkflow = (
   
   // Return a wrapper that matches the existing interface
   return {
-    invoke: async (input: { query: string }) => {
+    invoke: async (input: { query: string, sqlQuery?: string, serpApiQuery?: string }) => {
       console.log("⚡ Invoking LangGraph tool selection workflow");
       console.log("📝 Query:", input.query);
+      if (input.serpApiQuery) {
+        console.log("📝 SerpAPI Query available:", input.serpApiQuery.substring(0, 50) + (input.serpApiQuery.length > 50 ? "..." : ""));
+      }
       
       try {
         // Execute the tool selection graph
         const result = await toolSelectionGraph.invoke({ 
-          query: input.query 
+          query: input.query,
+          sqlQuery: input.sqlQuery,
+          serpApiQuery: input.serpApiQuery // Pass the hardcoded SerpAPI query from client
         });
         
         console.log(`✅ Tool selection workflow completed using: ${result.toolUsed}`);
+        if (result.toolUsed === "serpapi" && input.serpApiQuery) {
+          console.log("🔍 Used hardcoded SerpAPI query:", input.serpApiQuery.substring(0, 50) + (input.serpApiQuery.length > 50 ? "..." : ""));
+        }
         return result.response;
       } catch (error) {
         console.error("❌ Error in tool selection workflow:", error);
@@ -225,6 +271,9 @@ export const createAgentChain = (
     invoke: async (input) => {
       console.log("⚡ Invoking ReAct agent with calculator and SerpAPI tools");
       console.log("📝 Query:", input.query);
+      if (input.serpApiQuery) {
+        console.log("📝 SerpAPI Query available:", input.serpApiQuery.substring(0, 50) + (input.serpApiQuery.length > 50 ? "..." : ""));
+      }
       console.log("🔄 The agent will now decide which tools to use (if any)...");
       
       try {

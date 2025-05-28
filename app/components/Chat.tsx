@@ -22,27 +22,7 @@ interface SqlQueryResult {
   [key: string]: any;
 }
 
-// Type for SerpAPI query result
-interface SerpApiResult {
-  organic_results?: Array<{
-    position?: number;
-    title?: string;
-    link?: string;
-    snippet?: string;
-    displayed_link?: string;
-  }>;
-  answer_box?: {
-    title?: string;
-    answer?: string;
-    snippet?: string;
-  };
-  knowledge_graph?: {
-    title?: string;
-    description?: string;
-  };
-  error?: string;
-  [key: string]: any;
-}
+// We're removing the SerpAPI result interface since we're no longer making client-side SerpAPI calls
 
 // Type for model information
 interface ModelInfo {
@@ -75,14 +55,11 @@ const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrgan
   
   // Loading states
   const [isLoadingSql, setIsLoadingSql] = useState(false);
-  const [isLoadingSerpApi, setIsLoadingSerpApi] = useState(false);
   const [isLoadingLlm, setIsLoadingLlm] = useState(false);
   
   // Data states
   const [sqlResults, setSqlResults] = useState<SqlQueryResult | null>(null);
-  const [serpApiResults, setSerpApiResults] = useState<SerpApiResult | null>(null);
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
-  const [runSerpApi, setRunSerpApi] = useState<boolean>(true);
 
   // Scroll to the bottom of the chat when messages update
   useEffect(() => {
@@ -103,8 +80,8 @@ const SQL_QUERY_TEMPLATE = `
 
 `;
 
-// Possible queries
-// Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
+// Hardcoded SerpAPI query - this will be sent to the server for execution
+// The server-side ReACT agent will decide whether to use it based on the user's input
 const SERP_API_QUERY = "Can you provide the number of wins and losses for each of the top four MLB teams so far this year?";
 
   // Function to fetch SQL query results
@@ -138,46 +115,8 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
     }
   };
 
-  // Function to fetch SerpAPI query results
-  const fetchSerpApiResults = async (): Promise<SerpApiResult> => {
-    try {
-      // Use the hard-coded SERP_API_QUERY constant 
-      const query = SERP_API_QUERY;
-      
-      // Encode the query for URL usage
-      const encodedQuery = encodeURIComponent(query);
-      
-      // Add the API key and includeOrganic parameter to the request
-      const params = new URLSearchParams();
-      params.append('query', encodedQuery);
-      if (serpApiKey) {
-        params.append('api_key', serpApiKey);
-      }
-      
-      // Pass the includeOrganicResults setting to control whether organic results are included
-      params.append('includeOrganic', includeOrganicResults.toString());
-      console.log(`Fetching SerpAPI results with includeOrganic=${includeOrganicResults}`);
-      
-      // Append all parameters to the endpoint URL
-      const response = await fetch(`/api/serpapi?${params.toString()}`);
-      
-      if (!response.ok) {
-        // Handle HTTP errors
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.error || 
-          `Failed to fetch SerpAPI results: ${response.status} ${response.statusText}`
-        );
-      }
-      
-      const data = await response.json();
-      console.log('SerpAPI query results:', JSON.stringify(data, null, 2));
-      return data;
-    } catch (error) {
-      console.error('Error fetching SerpAPI results:', error);
-      throw error;
-    }
-  };
+// We're removing the fetchSerpApiResults function since we're no longer making client-side SerpAPI calls
+// All tool selection and execution will happen on the server side through the ReACT agent
 
   // Handle form submission and process the chat flow
   const handleSubmit = async (e: React.FormEvent) => {
@@ -192,10 +131,9 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
     setInput(''); // Clear input field
     
     try {
-      // Step 1: Fetch SQL and/or SerpAPI results and enhance the message
+      // Step 1: Fetch SQL results and enhance the message if SQL is enabled
       let enhancedMessage = userMessage.content;
       let sqlData: SqlQueryResult | null = null;
-      let serpApiData: SerpApiResult | null = null;
       
       // Fetch SQL results if enabled
       if (runSqlQuery) {
@@ -226,66 +164,8 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
         }
       }
       
-      // Fetch SerpAPI results if API key is provided and SERP_API_QUERY is not empty
-      if (serpApiKey && runSerpApi && SERP_API_QUERY.trim() !== '') {
-        setIsLoadingSerpApi(true);
-        try {
-          // Execute SerpAPI query
-          serpApiData = await fetchSerpApiResults();
-          setSerpApiResults(serpApiData);
-          
-          // Format the results and enhance the message with JSON data
-          if (serpApiData) {
-            // Format the SerpAPI results as JSON and append to the enhanced message
-            // This replaces the previous text formatting with raw JSON data
-            const serpApiJson = JSON.stringify(serpApiData, null, 2);
-            enhancedMessage += `\n\nSerpAPI JSON Results (Query: "${SERP_API_QUERY}"):\n${serpApiJson}`;
-            
-            // Log debug information
-            const estimatedTokens = estimateTokenCount(enhancedMessage);
-            console.log('Message size with SerpAPI JSON results added:', enhancedMessage.length, 'chars,', estimatedTokens, 'tokens (estimated) - SQL results not displayed again');
-            
-            // Also keep the human-readable format for display purposes in UI
-            const serpApiInfo = [];
-            
-            // Format organic search results for UI display
-            if (serpApiData.organic_results && serpApiData.organic_results.length > 0) {
-              serpApiInfo.push('Top Search Results:');
-              serpApiData.organic_results.slice(0, 3).forEach((result, index) => {
-                serpApiInfo.push(`${index + 1}. ${result.title || 'Unknown'}`);
-                if (result.snippet) serpApiInfo.push(`   ${result.snippet}`);
-                if (result.link) serpApiInfo.push(`   Source: ${result.link}`);
-              });
-            }
-            
-            // Format answer box if present (for UI display only)
-            if (serpApiData.answer_box) {
-              serpApiInfo.push('\nDirect Answer:');
-              if (serpApiData.answer_box.title) serpApiInfo.push(serpApiData.answer_box.title);
-              if (serpApiData.answer_box.answer) serpApiInfo.push(serpApiData.answer_box.answer);
-              if (serpApiData.answer_box.snippet) serpApiInfo.push(serpApiData.answer_box.snippet);
-            }
-            
-            // Format knowledge graph if present (for UI display only)
-            if (serpApiData.knowledge_graph) {
-              serpApiInfo.push('\nKnowledge Graph:');
-              if (serpApiData.knowledge_graph.title) serpApiInfo.push(`Title: ${serpApiData.knowledge_graph.title}`);
-              if (serpApiData.knowledge_graph.description) serpApiInfo.push(serpApiData.knowledge_graph.description);
-            }
-            
-            // Store formatted results for UI display (but don't add to enhancedMessage since we're using JSON)
-            if (serpApiInfo.length > 0) {
-              const formattedSerpResults = serpApiInfo.join('\n');
-              console.log('Human-readable SerpAPI results (for UI only):', formattedSerpResults);
-            }
-          }
-        } catch (serpApiError) {
-          console.error('Failed to fetch SerpAPI results:', serpApiError);
-          // Continue with the original message if SerpAPI fetch fails
-        } finally {
-          setIsLoadingSerpApi(false);
-        }
-      }
+      // We're removing the client-side SerpAPI call
+      // All tool selection (including SerpAPI) will be handled by the server-side ReACT agent
       
       // Step 2: Send message to Cohere API
       setIsLoadingLlm(true);
@@ -301,15 +181,18 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          // Send the enhanced message that includes SQL and SerpAPI JSON results
-          // This ensures the LLM receives both the user query and the SerpAPI data
+          // Send the enhanced message that includes SQL results if available
           message: enhancedMessage, 
           apiKey,
           chatHistory,
           // Only set runSqlQuery to true if the message is not empty and SQL template is not empty
           runSqlQuery: runSqlQuery && userMessage.content.trim() !== '' && SQL_QUERY_TEMPLATE.trim() !== '', // Don't run SQL if template is empty
           // Pass the predefined SQL query so that chains.ts has a valid SQL query to execute
-          sqlQuery: SQL_QUERY_TEMPLATE
+          sqlQuery: SQL_QUERY_TEMPLATE,
+          // Pass the SerpAPI key and hardcoded query to the server
+          // The server-side ReACT agent will decide whether to use SerpAPI based on the user's query
+          serpApiKey: serpApiKey,
+          serpApiQuery: SERP_API_QUERY
         })
       });
       
@@ -337,14 +220,14 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
       }
       
       // Add bot response to chat
-      // The LLM has now processed both the user query and the SerpAPI JSON data
+      // The LLM has now processed the user query and used the appropriate tools (Calculator, SerpAPI, etc.)
       setMessages(prev => [
         ...prev, 
         { role: 'bot', content: data.response }
       ]);
       
-      // Log that we've sent the enhanced message with JSON results to the LLM
-      console.log('Sent enhanced message to LLM with SerpAPI JSON data included');
+      // Log that we've sent the message to the LLM with hardcoded queries
+      console.log('Sent message to LLM with hardcoded SQL and SerpAPI queries');
     } catch (error) {
       console.error('Error sending message:', error);
       
@@ -356,7 +239,6 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
     } finally {
       // Reset all loading states
       setIsLoadingSql(false);
-      setIsLoadingSerpApi(false);
       setIsLoadingLlm(false);
     }
   }; // Close handleSubmit function
@@ -449,23 +331,7 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
             </div>
           )}
           
-          {isLoadingSerpApi && serpApiKey && (
-            <div className="flex justify-start">
-              <div className="bg-teal-100 text-teal-800 rounded-lg px-4 py-2 max-w-md">
-                <div className="flex items-center mb-1">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-teal-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span className="font-medium">Querying SerpAPI Search...</span>
-                </div>
-                <div className="w-full bg-teal-200 rounded-full h-1.5">
-                  <div className="bg-teal-600 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
-                </div>
-                <p className="text-xs mt-1">Executing query: "{SERP_API_QUERY}"</p>
-              </div>
-            </div>
-          )}
+          {/* Removed SerpAPI loading indicator - SerpAPI calls are now handled on the server side */}
           
           {isLoadingLlm && (
             <div className="flex justify-start">
@@ -496,12 +362,12 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
-            disabled={(isLoadingSql || isLoadingSerpApi || isLoadingLlm) || !apiKey}
+            disabled={(isLoadingSql || isLoadingLlm) || !apiKey}
             className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
           />
           <button
             type="submit"
-            disabled={!input.trim() || (isLoadingSql || isLoadingSerpApi || isLoadingLlm) || !apiKey}
+            disabled={!input.trim() || (isLoadingSql || isLoadingLlm) || !apiKey}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-400"
           >
             Send
@@ -509,7 +375,7 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
           <button
             type="button"
             onClick={resetChat}
-            disabled={(isLoadingSql || isLoadingSerpApi || isLoadingLlm) || messages.length === 0}
+            disabled={(isLoadingSql || isLoadingLlm) || messages.length === 0}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:bg-gray-100 disabled:text-gray-400"
           >
             Reset

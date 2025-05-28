@@ -14,6 +14,7 @@ interface ToolSelectionState {
   analysis: string;                 // Reasoning about the query
   toolOutput: string | null;        // Output from the selected tool
   finalResponse: string | null;     // Final response to the user
+  serpApiQuery?: string;            // Optional hardcoded SerpAPI query from client
 }
 
 // Tool detection patterns
@@ -55,6 +56,7 @@ export function createToolSelectionGraph(
       analysis: {},
       toolOutput: {},
       finalResponse: {},
+      serpApiQuery: {}, // Add channel for serpApiQuery
     }
   });
 
@@ -69,7 +71,7 @@ export function createToolSelectionGraph(
     // Simple pattern-based analysis before calling the LLM
     // This helps reduce unnecessary LLM calls for obvious cases
     
-    // Check for calculator patterns
+    // Check for calculator patterns - Calculator takes priority over SerpAPI
     const isCalculatorQuery = CALCULATOR_PATTERNS.some(pattern => pattern.test(state.query));
     if (isCalculatorQuery) {
       console.log("📊 Query appears to need calculation");
@@ -80,8 +82,11 @@ export function createToolSelectionGraph(
       };
     }
     
-    // Check for SerpAPI patterns only if SerpAPI tool is available
-    if (serpApiTool) {
+    // Only check for SerpAPI patterns if:
+    // 1. No calculator pattern was matched (we already returned above if one was)
+    // 2. SerpAPI tool is available
+    // 3. Query string is not empty
+    if (serpApiTool && state.query && state.query.trim() !== "") {
       const isSerpApiQuery = SERPAPI_PATTERNS.some(pattern => pattern.test(state.query));
       if (isSerpApiQuery) {
         console.log("🔎 Query appears to need web search");
@@ -223,56 +228,134 @@ Please generate a helpful and natural-sounding response that explains the calcul
     }
     
     try {
-      // Use a prompt to extract the search query
-      const searchPrompt = ChatPromptTemplate.fromMessages([
-        ["human", `Convert this user question into a clear, concise search query for a search engine.
+      let searchQuery: string;
+      
+      // Check if a hardcoded SerpAPI query is available
+      if (state.serpApiQuery && state.serpApiQuery.trim() !== "") {
+        // Use the hardcoded query from the client
+        searchQuery = state.serpApiQuery;
+        console.log("🔎 Using hardcoded SerpAPI query:", searchQuery);
+      } else {
+        // No hardcoded query available, extract one from the user's input
+        // Use a prompt to extract the search query
+        const searchPrompt = ChatPromptTemplate.fromMessages([
+          ["human", `Convert this user question into a clear, concise search query for a search engine.
 Return ONLY the search query, nothing else.
 
 User question: {query}`]
-      ]);
+        ]);
+        
+        // Create the search query extractor chain
+        const searchQueryChain = RunnableSequence.from([
+          searchPrompt,
+          model,
+          new StringOutputParser()
+        ]);
+        
+        // Get the search query
+        searchQuery = await searchQueryChain.invoke({ query: state.query });
+        console.log("🔎 Generated search query:", searchQuery);
+      }
       
-      // Create the search query extractor chain
-      const searchQueryChain = RunnableSequence.from([
-        searchPrompt,
-        model,
-        new StringOutputParser()
-      ]);
-      
-      // Get the search query
-      const searchQuery = await searchQueryChain.invoke({ query: state.query });
-      console.log("🔎 Search query:", searchQuery);
-      
-      // Execute the search
+      // Execute the search - SerpAPI tool expects an object with a query property
       const searchResult = await serpApiTool.invoke({ query: searchQuery });
       console.log("🔎 SerpAPI result obtained");
       
-      // Create a prompt to format the search results into a response
-      const responsePrompt = ChatPromptTemplate.fromMessages([
-        ["human", `The user asked: {query}
-
-I've searched the web and found this information:
-{searchResult}
-
-Please generate a helpful and natural-sounding response that answers the user's question based on this information. 
-Include relevant facts from the search results, but be concise. 
-If the search results don't directly answer the question, acknowledge that and provide the best information available.`]
-      ]);
+      // Log a detailed preview of the search result to help with debugging
+      console.log("🔍 SERP API RESULT TYPE:", typeof searchResult);
+      const resultPreview = typeof searchResult === 'string' 
+        ? searchResult.substring(0, 200) 
+        : JSON.stringify(searchResult, null, 2).substring(0, 200);
+      console.log(`🔎 SerpAPI result preview:\n${resultPreview}...`);
       
-      // Generate the formatted response
-      const responseChain = RunnableSequence.from([
-        responsePrompt,
-        model,
-        new StringOutputParser()
-      ]);
+      // Format the search result for the LLM with more robust handling
+      let formattedSearchResult;
+      let extractedInfo = "No relevant information found.";
       
-      const formattedResponse = await responseChain.invoke({ 
-        query: state.query, 
-        searchResult 
-      });
+      if (typeof searchResult === 'string') {
+        // For string results, use directly
+        formattedSearchResult = searchResult;
+        extractedInfo = searchResult;
+      } else if (typeof searchResult === 'object' && searchResult !== null) {
+        try {
+          // Extract the most useful information from the result object
+          if (searchResult.organic_results && searchResult.organic_results.length > 0) {
+            // Extract information from organic results
+            extractedInfo = searchResult.organic_results
+              .map((result, index) => {
+                return `[Result ${index + 1}]\nTitle: ${result.title || ''}\nSnippet: ${result.snippet || ''}\nSource: ${result.source || ''}\n`;
+              })
+              .join('\n');
+          } else if (searchResult.sports_results) {
+            // Handle sports-specific results
+            extractedInfo = `Sports Results: ${JSON.stringify(searchResult.sports_results, null, 2)}`;
+          } else if (searchResult.answer_box) {
+            // Handle answer box
+            extractedInfo = `Answer: ${searchResult.answer_box.answer || searchResult.answer_box.snippet || JSON.stringify(searchResult.answer_box, null, 2)}`;
+          } else {
+            // Default to stringify the whole object
+            extractedInfo = JSON.stringify(searchResult, null, 2);
+          }
+          
+          // Keep a complete version for debugging
+          formattedSearchResult = JSON.stringify(searchResult, null, 2);
+        } catch (e) {
+          console.error("Error formatting search results:", e);
+          formattedSearchResult = "Error formatting search results: " + e.message;
+          extractedInfo = "Error extracting information from search results.";
+        }
+      } else {
+        console.warn("SerpAPI returned unexpected result type:", searchResult);
+        formattedSearchResult = "No relevant information found.";
+        extractedInfo = "No relevant information found.";
+      }
+      
+      // Log what we extracted to verify it's meaningful
+      console.log("🔍 Extracted information preview:", extractedInfo.substring(0, 200) + "...");
+      
+      // Limit the size of the extracted info to avoid token limit issues
+      // but using a smarter approach that preserves the most relevant parts
+      if (extractedInfo.length > 3000) {
+        const firstThird = extractedInfo.substring(0, 1000);
+        const lastThird = extractedInfo.substring(extractedInfo.length - 1000);
+        extractedInfo = `${firstThird}\n\n...[Content truncated for brevity]...\n\n${lastThird}`;
+        console.log("🔍 Truncated extracted information to fit token limits");
+      }
+      
+      // DIRECT APPROACH: Manually construct a prompt with clear section markers
+      // This makes it absolutely explicit that we're including the search results
+      const manualPrompt = `
+=== USER QUERY ===
+${state.query}
+
+=== SEARCH RESULTS ===
+${extractedInfo}
+
+=== INSTRUCTIONS ===
+Generate a helpful and natural-sounding response that answers the user's question based on the search results above.
+Include relevant facts from the search results, but be concise.
+If the search results don't directly answer the question, acknowledge that and provide the best information available.
+`;
+      
+      console.log("🔍 Sending prompt to LLM:", manualPrompt.substring(0, 200) + "...");
+      
+      // Generate the formatted response by directly calling the model
+      let formattedResponse;
+      try {
+        // Direct call to the model with our manually constructed prompt
+        const result = await model.invoke(manualPrompt);
+        formattedResponse = result.content;
+        console.log("✅ Successfully generated response from SerpAPI results");
+        console.log("✅ Response preview:", formattedResponse.substring(0, 100) + "...");
+      } catch (error) {
+        console.error("❌ Error generating response from SerpAPI results:", error);
+        // Create a more informative fallback response that includes some of the extracted info
+        formattedResponse = `I found some information about "${state.query}", but I'm having trouble formatting it into a helpful response. Here's what I found:\n\n${extractedInfo.substring(0, 300)}...`;
+      }
       
       return {
         ...state,
-        toolOutput: searchResult,
+        toolOutput: formattedSearchResult,
         finalResponse: formattedResponse
       };
     } catch (error) {
@@ -354,8 +437,16 @@ If the search results don't directly answer the question, acknowledge that and p
   
   // Return a wrapper that simplifies the interface
   return {
-    invoke: async ({ query, chatHistory = [] }: { query: string, chatHistory?: Message[] }) => {
+    invoke: async ({ query, chatHistory = [], sqlQuery = "", serpApiQuery = "" }: { 
+      query: string, 
+      chatHistory?: Message[],
+      sqlQuery?: string,
+      serpApiQuery?: string 
+    }) => {
       console.log("🚀 Starting tool selection workflow for query:", query);
+      if (serpApiQuery) {
+        console.log("🔎 Hardcoded SerpAPI query available:", serpApiQuery.substring(0, 50) + (serpApiQuery.length > 50 ? "..." : ""));
+      }
       
       // Initialize the state
       const initialState: ToolSelectionState = {
@@ -364,7 +455,8 @@ If the search results don't directly answer the question, acknowledge that and p
         selectedTool: null,
         analysis: "",
         toolOutput: null,
-        finalResponse: null
+        finalResponse: null,
+        serpApiQuery
       };
       
       // Execute the graph
