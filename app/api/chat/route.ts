@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CohereClient } from 'cohere-ai';
 import { getCohereModel } from '../../langchain/models';
-import { createRagChain } from '../../langchain/chains';
+import { createRagChain, createAgentChain } from '../../langchain/chains';
 import { createSqlQueryTool } from '../../langchain/tools';
 
 // Define types for request body
@@ -11,6 +10,7 @@ interface ChatRequestBody {
   chatHistory?: ChatMessage[];
   runSqlQuery?: boolean;
   sqlQuery?: string;
+  serpApiKey?: string;
 }
 
 // Interface for chat messages
@@ -68,11 +68,17 @@ function isValidCohereApiKey(apiKey: string): boolean {
   return apiKey && apiKey.length >= 20;
 }
 
+// Function to detect if the query potentially needs a calculator
+function mightNeedCalculation(message: string): boolean {
+  // This is now handled by the ReAct agent's reasoning
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body = await request.json() as ChatRequestBody;
-    const { message, apiKey, chatHistory = [], runSqlQuery = true, sqlQuery = "" } = body;
+    const { message, apiKey, chatHistory = [], runSqlQuery = true, sqlQuery = "", serpApiKey } = body;
     
     // Validate the API key format
     if (!isValidCohereApiKey(apiKey)) {
@@ -117,14 +123,25 @@ export async function POST(request: NextRequest) {
     
     const sqlTool = createSqlQueryTool(fetchSql);
     
-    // Create the RAG chain with SQL integration
-    const chain = createRagChain(model, sqlTool, runSqlQuery);
+    // Determine if we should use the agent chain based on serpApiKey and message content
+    let result;
     
-    // Execute the chain
-    const result = await chain.invoke({
-      query: message,
-      sqlQuery: sqlQuery // Pass the predefined SQL query to chains.ts
-    });
+    if (serpApiKey) {
+      // Use the agent chain when SerpAPI key is available
+      console.log("Using ReAct agent with calculator and SerpAPI capabilities");
+      const chain = createAgentChain(model, sqlTool, serpApiKey);
+      result = await chain.invoke({
+        query: message
+      });
+    } else {
+      // Fall back to the regular RAG chain when no SerpAPI key is available
+      console.log("Using regular RAG chain without ReAct agent");
+      const chain = createRagChain(model, sqlTool, runSqlQuery);
+      result = await chain.invoke({
+        query: message,
+        sqlQuery: sqlQuery // Pass the predefined SQL query to chains.ts
+      });
+    }
     
     console.log('Received response from LangChain');
     
