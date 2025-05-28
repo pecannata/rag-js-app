@@ -4,264 +4,195 @@ import { BaseChatModel } from 'langchain-core/language_models/chat_models';
 import { RunnableSequence } from 'langchain-core/runnables';
 import { StringOutputParser } from 'langchain-core/output_parsers';
 import { DynamicStructuredTool } from '@langchain/core/tools';
-import { AgentExecutor } from 'langchain/agents/executor';
 
-// Import from langgraph
-import { StateGraph, END } from '@langchain/langgraph';
-
-// ReAct agent node types
-interface AgentState {
-  input: string;
-  agentOutcome?: string;
-  intermediateSteps: Array<{
-    action: {
-      tool: string;
-      toolInput: string;
-      log: string;
-    };
-    observation: string;
-  }>;
-  response?: string;
+// Helper interface for tracking intermediate steps
+interface ToolAction {
+  tool: string;
+  toolInput: string;
+  log: string;
 }
 
-// Create a ReAct agent that can use multiple tools including calculator and SerpAPI
+interface ToolObservation {
+  action: ToolAction;
+  observation: string;
+}
+
+// Create a simplified calculator-focused agent
 export const createCalculatorReactAgent = (
   model: BaseChatModel,
   calculatorTool: Tool,
-  sqlTool: Tool,
-  serpApiTool: Tool
+  sqlTool: Tool, // Kept for compatibility
+  serpApiTool: Tool // Kept for compatibility
 ) => {
-  // Define the tools array
-  const tools = [calculatorTool, serpApiTool, sqlTool];
-  
-  // Create a prompt template for the agent
+  // Create a prompt template focused on calculator functionality without using system message
+  // Only using 'human' and 'ai' message types which are supported by Cohere models
   const prompt = ChatPromptTemplate.fromMessages([
-    ["system", `You are an AI assistant that helps answer questions.
+    ["human", `I'm going to give you instructions for how to respond to my questions.
+
+You are an AI assistant that helps answer questions.
     
-You have access to the following tools:
+You have access to the following tool:
 
 Calculator: Useful for performing mathematical calculations. Use this tool whenever a calculation is needed.
-SerpAPI: Useful for retrieving information from the web.
-SQL: Useful for querying the database.
 
-When the user asks a question that requires calculation, use the Calculator tool.
-When the user asks a factual question that needs up-to-date information, use the SerpAPI tool.
+For math problems like "what is 45*32" or any calculation, ALWAYS use the Calculator tool.
 
-Think step-by-step to determine which tool is most appropriate for the task.
+Use the following format:
 
-Use the ReAct approach (Reasoning and Acting) to solve problems:
-1. Reason about what information you need and which tool to use
-2. Take an action using the appropriate tool
-3. Observe the result
-4. Use the result to provide a final answer
+Question: The user's question
+Thought: Think step-by-step about how to solve the problem
+Action: Calculator
+Action Input: The mathematical expression to calculate
+Observation: The result of the calculation
+Thought: Reflect on the result and formulate a response
+Final Answer: Your final answer to the user's question
 
-Only use the tools when necessary. If you can answer directly, do so.`],
-    ["human", "{input}"],
-    new MessagesPlaceholder("agent_scratchpad"),
+Begin!
+
+My question is: {input}`],
+    new MessagesPlaceholder("chat_history"),
   ]);
 
-  // Create a function to execute each tool
-  const toolExecutor = async (
-    state: AgentState,
-    tool: Tool
-  ): Promise<AgentState> => {
-    // Enhanced logging for tool execution
-    if (tool.name === "calculator") {
-      console.log("===============================================");
-      console.log("🧮 CALCULATOR TOOL USED 🧮");
-      console.log("===============================================");
-      
-      // Get the calculation input
-      const lastStep = state.intermediateSteps[state.intermediateSteps.length - 1];
-      const calculationInput = lastStep.action.toolInput;
-      console.log(`Calculation being performed: ${calculationInput}`);
-    } else {
-      console.log(`Executing tool: ${tool.name}`);
+  // Function to parse LLM output into action and tool input
+  const extractAction = (llmOutput: string): ToolAction | null => {
+    // Case-insensitive regex patterns for action detection
+    const calculatorPattern = /action:?\s*calculator/i;
+    
+    // Regex for extracting action input that can span multiple lines
+    const actionInputPattern = /action\s*input:?\s*([\s\S]*?)(?=\n\s*(?:action|observation|thought|final answer|$)|\s*$)/i;
+    
+    // Check for calculator action with improved pattern matching
+    if (calculatorPattern.test(llmOutput)) {
+      const matches = llmOutput.match(actionInputPattern);
+      const toolInput = matches ? matches[1].trim() : "";
+      console.log("📊 Calculator action detected. Input:", toolInput);
+      return { 
+        tool: "calculator", 
+        toolInput: toolInput, 
+        log: llmOutput 
+      };
     }
     
-    // Process the last step to get action and tool input
-    const lastStep = state.intermediateSteps[state.intermediateSteps.length - 1];
-    const action = lastStep.action;
-    
-    // Execute the tool with the provided input
-    const observation = await tool.invoke(action.toolInput);
-    
-    // Enhanced logging for calculator results
-    if (tool.name === "calculator") {
-      console.log(`Calculation result: ${observation}`);
-      console.log("===============================================");
+    // Check if this is a final answer
+    if (llmOutput.includes("Final Answer:") || 
+        llmOutput.includes("I'll answer directly") || 
+        llmOutput.includes("I don't need to use a tool")) {
+      return null; // No tool action, just a direct answer
     }
     
-    // Update the step with the observation
-    lastStep.observation = observation.toString();
+    // If we detected something that looks like math but wasn't properly formatted
+    const mathPattern = /\d+\s*[\+\-\*\/]\s*\d+/;
+    if (mathPattern.test(llmOutput)) {
+      const mathExpression = llmOutput.match(mathPattern)?.[0] || "";
+      console.log("📊 Implicit calculator action detected:", mathExpression);
+      return {
+        tool: "calculator",
+        toolInput: mathExpression,
+        log: `Thought: This looks like a math expression\nAction: Calculator\nAction Input: ${mathExpression}`
+      };
+    }
     
-    return state;
+    return null;
   };
   
-  // Create a function to determine which tool to use
-  const determineNextTool = (state: AgentState): string => {
-    const lastStep = state.intermediateSteps[state.intermediateSteps.length - 1];
+  // Function to execute the calculator tool
+  const executeCalculator = async (toolInput: string): Promise<string> => {
+    console.log("===============================================");
+    console.log("🧮 CALCULATOR TOOL USED 🧮");
+    console.log("===============================================");
+    console.log(`Calculation being performed: ${toolInput}`);
     
-    // Get the tool name from the action
-    return lastStep.action.tool;
+    // Log additional debug info for calculator queries
+    console.log("Tool details:", {
+      toolName: calculatorTool.name,
+      toolDescription: calculatorTool.description
+    });
+    
+    try {
+      // Execute the calculator tool
+      const result = await calculatorTool.invoke(toolInput);
+      
+      // Log the result
+      console.log(`Calculation result: ${result}`);
+      console.log("===============================================");
+      
+      return result.toString();
+    } catch (error) {
+      console.error("Calculator error:", error);
+      return `Error: ${error}`;
+    }
   };
   
-  // Function to create the agent using the LLM and tools
-  const createAgent = () => {
-    // Function to parse LLM output into action and tool input
-    const extractAction = (llmOutput: string): { tool: string; toolInput: string; log: string } => {
-      // This is a simplified version - a more robust implementation would use regex
-      let tool = "unknown";
-      let toolInput = "";
+  // Main agent function
+  const runAgent = async (input: string, maxIterations = 5): Promise<string> => {
+    // Initialize chat history with only 'human' and 'ai' message types
+    let chatHistory: Array<["human" | "ai", string]> = [];
+    let iterations = 0;
+    
+    while (iterations < maxIterations) {
+      iterations++;
       
-      if (llmOutput.includes("Action: Calculator")) {
-        tool = "calculator";
-        const matches = llmOutput.match(/Action Input: (.*?)(?:\n|$)/);
-        toolInput = matches ? matches[1] : "";
-      } else if (llmOutput.includes("Action: SerpAPI")) {
-        tool = "serpapi";
-        const matches = llmOutput.match(/Action Input: (.*?)(?:\n|$)/);
-        toolInput = matches ? matches[1] : "";
-      } else if (llmOutput.includes("Action: SQL")) {
-        tool = "sql_query";
-        const matches = llmOutput.match(/Action Input: (.*?)(?:\n|$)/);
-        toolInput = matches ? matches[1] : "";
+      // Generate the next action
+      const promptArgs = {
+        input: input,
+        chat_history: chatHistory
+      };
+      
+      // Call the model to get the next action
+      const rawOutput = await prompt.pipe(model).pipe(new StringOutputParser()).invoke(promptArgs);
+      
+      // Check if this output includes a final answer
+      if (rawOutput.includes("Final Answer:")) {
+        const finalAnswerMatch = rawOutput.match(/Final Answer:(.+?)(?:$|(?=\n\s*\n))/s);
+        const finalAnswer = finalAnswerMatch ? finalAnswerMatch[1].trim() : rawOutput;
+        return finalAnswer;
       }
       
-      return { tool, toolInput, log: llmOutput };
-    };
-    
-    // Function to format intermediate steps for the prompt
-    const formatIntermediateSteps = (steps: AgentState["intermediateSteps"]) => {
-      return steps.map(step => {
-        return [
-          ["ai", step.action.log],
-          ["human", `Observation: ${step.observation}`]
-        ];
-      }).flat();
-    };
-    
-    // Create the agent using RunnableSequence
-    return RunnableSequence.from([
-      {
-        input: (state: AgentState) => state.input,
-        agent_scratchpad: (state: AgentState) => {
-          return formatIntermediateSteps(state.intermediateSteps);
-        }
-      },
-      prompt,
-      model,
-      new StringOutputParser(),
-      (output: string) => {
-        if (output.includes("I'll answer directly") || 
-            output.includes("I don't need to use a tool") || 
-            output.includes("Final Answer:")) {
-          return { agentOutcome: "FINISH", response: output };
-        }
-        
-        // Extract the action and tool input
-        const { tool, toolInput, log } = extractAction(output);
-        
-        // If the calculator tool is selected, log it for visibility
-        if (tool === "calculator") {
-          console.log("🧮 Calculator tool selected for input:", toolInput);
-        }
-        
-        // Return the action
-        return {
-          agentOutcome: "CONTINUE",
-          intermediateSteps: [{
-            action: { tool, toolInput, log },
-            observation: ""
-          }]
-        };
+      // Extract tool action
+      const toolAction = extractAction(rawOutput);
+      
+      // If no tool action was found, treat as final answer
+      if (!toolAction) {
+        return rawOutput;
       }
-    ]);
+      
+      // If this is a calculator action, execute it
+      if (toolAction.tool === "calculator") {
+        console.log("🧮 Calculator tool selected for input:", toolAction.toolInput);
+        
+        // Execute the calculator
+        const observation = await executeCalculator(toolAction.toolInput);
+        
+        // Add the action and observation to chat history
+        // Making sure to use only 'human' and 'ai' message types
+        chatHistory.push(["ai", toolAction.log]);
+        chatHistory.push(["human", `Observation: ${observation}`]);
+      }
+    }
+    
+    // If we've reached the maximum number of iterations, return a fallback response
+    return "I've thought about this for a while but couldn't reach a conclusive answer.";
   };
   
-  // Create the agent
-  const agent = createAgent();
-  
-  // Create the state graph
-  const workflow = new StateGraph<AgentState>({
-    channels: {
-      input: {},
-      agentOutcome: {},
-      intermediateSteps: {},
-      response: {}
-    }
-  });
-  
-  // Add the nodes to the graph
-  workflow.addNode("agent", agent);
-  workflow.addNode("calculator", async (state) => toolExecutor(state, calculatorTool));
-  workflow.addNode("serpapi", async (state) => toolExecutor(state, serpApiTool));
-  workflow.addNode("sql_query", async (state) => toolExecutor(state, sqlTool));
-  
-  // Add the edges to the graph
-  workflow.addEdge("agent", "calculator", {
-    if: (state) => {
-      if (state.agentOutcome === "CONTINUE") {
-        const lastStep = state.intermediateSteps[state.intermediateSteps.length - 1];
-        return lastStep.action.tool === "calculator";
-      }
-      return false;
-    }
-  });
-  
-  workflow.addEdge("agent", "serpapi", {
-    if: (state) => {
-      if (state.agentOutcome === "CONTINUE") {
-        const lastStep = state.intermediateSteps[state.intermediateSteps.length - 1];
-        return lastStep.action.tool === "serpapi";
-      }
-      return false;
-    }
-  });
-  
-  workflow.addEdge("agent", "sql_query", {
-    if: (state) => {
-      if (state.agentOutcome === "CONTINUE") {
-        const lastStep = state.intermediateSteps[state.intermediateSteps.length - 1];
-        return lastStep.action.tool === "sql_query";
-      }
-      return false;
-    }
-  });
-  
-  // Add edges from tools back to agent
-  workflow.addEdge("calculator", "agent");
-  workflow.addEdge("serpapi", "agent");
-  workflow.addEdge("sql_query", "agent");
-  
-  // Add conditional edge to end
-  workflow.addEdge("agent", END, {
-    if: (state) => state.agentOutcome === "FINISH"
-  });
-  
-  // Set the entry point
-  workflow.setEntryPoint("agent");
-  
-  // Compile the graph
-  const app = workflow.compile();
-  
-  // Create a wrapper that implements the AgentExecutor interface
+  // Return an interface compatible with the original agent
   return {
     invoke: async ({ input }: { input: string }) => {
-      // Run the graph
-      console.log("🔍 Processing input with ReAct agent:", input);
-      const result = await app.invoke({
-        input,
-        intermediateSteps: [],
-      });
+      console.log("🔍 Processing input with Calculator agent:", input);
       
-      // Return the response
-      return { output: result.response || "I couldn't find an answer to your question." };
+      try {
+        console.log("Starting calculator agent with compatible message types (human/ai only)");
+        // Run the agent
+        const result = await runAgent(input);
+        return { output: result };
+      } catch (error) {
+        console.error("Error executing calculator agent:", error);
+        return { output: `Sorry, I encountered an error: ${error}` };
+      }
     }
   };
 };
 
-// Create a tool that wraps the SerpAPI for use with the agent
+// Create a tool that wraps the SerpAPI for use with the agent (kept for compatibility)
 export const createSerpApiAgentTool = (fetchSerpApiResults: (query: string) => Promise<any>) => {
   return new DynamicStructuredTool({
     name: "serpapi",

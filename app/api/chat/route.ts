@@ -70,8 +70,19 @@ function isValidCohereApiKey(apiKey: string): boolean {
 
 // Function to detect if the query potentially needs a calculator
 function mightNeedCalculation(message: string): boolean {
-  // This is now handled by the ReAct agent's reasoning
-  return true;
+  // Check for patterns that indicate a mathematical calculation is needed
+  const mathPattern = /what\s+is\s+[\d\s\+\-\*\/\^\(\)\.]+|calculate\s+[\d\s\+\-\*\/\^\(\)\.]+|[\d\s\+\-\*\/\^\(\)\.]+\s*=\s*\?|compute\s+[\d\s\+\-\*\/\^\(\)\.]+|evaluate\s+[\d\s\+\-\*\/\^\(\)\.]+/i;
+  
+  // Check for specific arithmetic operators with numbers on both sides
+  const operatorPattern = /\d+\s*[\+\-\*\/\^]\s*\d+/;
+  
+  // Log the detection attempt
+  const isMathQuery = mathPattern.test(message) || operatorPattern.test(message);
+  if (isMathQuery) {
+    console.log("📊 Mathematical query detected:", message);
+  }
+  
+  return isMathQuery;
 }
 
 export async function POST(request: NextRequest) {
@@ -126,15 +137,27 @@ export async function POST(request: NextRequest) {
     // Determine if we should use the agent chain based on serpApiKey and message content
     let result;
     
-    if (serpApiKey) {
-      // Use the agent chain when SerpAPI key is available
-      console.log("Using ReAct agent with calculator and SerpAPI capabilities");
-      const chain = createAgentChain(model, sqlTool, serpApiKey);
+    // Check if the message might be a calculation request
+    const needsCalculation = mightNeedCalculation(message);
+    
+    if (serpApiKey || needsCalculation) {
+      // Use the agent chain when:
+      // 1. SerpAPI key is available, OR
+      // 2. The message appears to require calculation
+      if (needsCalculation) {
+        console.log("📊 Using ReAct agent with calculator for mathematical query");
+      } else {
+        console.log("Using ReAct agent with calculator and SerpAPI capabilities");
+      }
+      
+      // Create the agent chain with or without a valid SerpAPI key
+      const chain = createAgentChain(model, sqlTool, serpApiKey || "");
       result = await chain.invoke({
         query: message
       });
     } else {
       // Fall back to the regular RAG chain when no SerpAPI key is available
+      // and the query doesn't appear to need calculation
       console.log("Using regular RAG chain without ReAct agent");
       const chain = createRagChain(model, sqlTool, runSqlQuery);
       result = await chain.invoke({

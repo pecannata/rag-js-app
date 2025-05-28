@@ -103,15 +103,31 @@ export const createAgentChain = (
   sqlTool,
   serpApiKey
 ) => {
+  // Handle empty serpApiKey gracefully
+  const hasSerpApiKey = serpApiKey && serpApiKey.trim() !== "";
   // Create the calculator tool
   const calculatorTool = createCalculatorTool();
   console.log("📊 Calculator tool created and ready to use");
+  console.log("Calculator tool details:", {
+    name: calculatorTool.name,
+    description: calculatorTool.description
+  });
   
-  // Create the SerpAPI tool
-  const serpApiTool = createSerpApiToolAdapter(serpApiKey);
+  // Create the SerpAPI tool only if a valid key is provided
+  const serpApiTool = hasSerpApiKey ? createSerpApiToolAdapter(serpApiKey) : null;
   
-  // Create the ReAct agent with both tools
-  const agent = createCalculatorReactAgent(model, calculatorTool, sqlTool, serpApiTool);
+  // Log SerpAPI tool availability
+  if (hasSerpApiKey) {
+    console.log("🔍 SerpAPI tool created and ready to use");
+  } else {
+    console.log("ℹ️ SerpAPI tool not available (no API key provided)");
+  }
+  
+  // Create the ReAct agent with available tools
+  // Pass the serpApiTool only if it's available
+  const agent = hasSerpApiKey 
+    ? createCalculatorReactAgent(model, calculatorTool, sqlTool, serpApiTool)
+    : createCalculatorReactAgent(model, calculatorTool, sqlTool, null);
   
   // Return a function that invokes the agent
   return {
