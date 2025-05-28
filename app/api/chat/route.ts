@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCohereModel } from '../../langchain/models';
 import { createRagChain, createAgentChain } from '../../langchain/chains';
-import { createSqlQueryTool } from '../../langchain/tools';
+import { createSqlQueryTool, createCalculatorTool } from '../../langchain/tools';
 
 // Define types for request body
 interface ChatRequestBody {
@@ -69,6 +69,7 @@ function isValidCohereApiKey(apiKey: string): boolean {
 }
 
 // Function to detect if the query potentially needs a calculator
+// This is kept for backward compatibility but the LangGraph workflow will handle this automatically
 function mightNeedCalculation(message: string): boolean {
   // Check for patterns that indicate a mathematical calculation is needed
   const mathPattern = /what\s+is\s+[\d\s\+\-\*\/\^\(\)\.]+|calculate\s+[\d\s\+\-\*\/\^\(\)\.]+|[\d\s\+\-\*\/\^\(\)\.]+\s*=\s*\?|compute\s+[\d\s\+\-\*\/\^\(\)\.]+|evaluate\s+[\d\s\+\-\*\/\^\(\)\.]+/i;
@@ -134,39 +135,20 @@ export async function POST(request: NextRequest) {
     
     const sqlTool = createSqlQueryTool(fetchSql);
     
-    // Determine if we should use the agent chain based on serpApiKey and message content
-    let result;
+    // Create the integrated workflow using LangGraph
+    console.log("🚀 Using LangGraph workflow for intelligent tool selection");
+    console.log("🔧 Available tools: Calculator, SQL" + (serpApiKey ? ", SerpAPI" : ""));
     
-    // Check if the message might be a calculation request
-    const needsCalculation = mightNeedCalculation(message);
+    // Create the agent chain with LangGraph enabled (passing true as the last parameter)
+    const chain = createAgentChain(model, sqlTool, serpApiKey || "", true);
     
-    if (serpApiKey || needsCalculation) {
-      // Use the agent chain when:
-      // 1. SerpAPI key is available, OR
-      // 2. The message appears to require calculation
-      if (needsCalculation) {
-        console.log("📊 Using ReAct agent with calculator for mathematical query");
-      } else {
-        console.log("Using ReAct agent with calculator and SerpAPI capabilities");
-      }
-      
-      // Create the agent chain with or without a valid SerpAPI key
-      const chain = createAgentChain(model, sqlTool, serpApiKey || "");
-      result = await chain.invoke({
-        query: message
-      });
-    } else {
-      // Fall back to the regular RAG chain when no SerpAPI key is available
-      // and the query doesn't appear to need calculation
-      console.log("Using regular RAG chain without ReAct agent");
-      const chain = createRagChain(model, sqlTool, runSqlQuery);
-      result = await chain.invoke({
-        query: message,
-        sqlQuery: sqlQuery // Pass the predefined SQL query to chains.ts
-      });
-    }
+    // Execute the workflow - it will automatically select the appropriate tool
+    const result = await chain.invoke({
+      query: message,
+      sqlQuery: sqlQuery // Pass the predefined SQL query to chains.ts
+    });
     
-    console.log('Received response from LangChain');
+    console.log('Received response from LangGraph workflow');
     
     // Log the response (truncate if too long)
     console.log('LangChain response:', 

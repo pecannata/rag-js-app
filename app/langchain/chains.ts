@@ -2,7 +2,12 @@ import { RunnableSequence } from 'langchain-core/runnables';
 import { StringOutputParser } from 'langchain-core/output_parsers';
 import { PromptTemplate } from 'langchain-core/prompts';
 import { createCalculatorTool } from './tools';
-import { createCalculatorReactAgent, createSerpApiAgentTool } from './agents/react_agent';
+import { 
+  createCalculatorReactAgent, 
+  createSerpApiAgentTool, 
+  createReactAgent 
+} from './agents/react_agent';
+import { createToolSelectionGraph } from './graphs/tool_selection_graph';
 import { Tool } from 'langchain-core/tools';
 import { BaseChatModel } from 'langchain-core/language_models/chat_models';
 
@@ -97,12 +102,98 @@ const createSerpApiToolAdapter = (serpApiKey) => {
   return createSerpApiAgentTool(fetchSerpApiResults);
 };
 
+/**
+ * Create an integrated workflow that uses LangGraph for tool selection and execution
+ * This function creates a workflow that analyzes the query and routes it to the appropriate tool
+ */
+export const createToolSelectionWorkflow = (
+  model: BaseChatModel,
+  sqlTool: Tool,
+  serpApiKey: string | null | undefined,
+  ragChain: any
+) => {
+  console.log("🚀 Creating LangGraph tool selection workflow");
+  
+  // Create array of available tools
+  const tools: Tool[] = [];
+  
+  // Always add calculator tool
+  const calculatorTool = createCalculatorTool();
+  tools.push(calculatorTool);
+  console.log("📊 Calculator tool added to the workflow");
+  
+  // Handle SerpAPI tool (only if valid key is provided)
+  const hasSerpApiKey = serpApiKey && serpApiKey.trim() !== "";
+  let serpApiTool = null;
+  
+  if (hasSerpApiKey) {
+    serpApiTool = createSerpApiToolAdapter(serpApiKey);
+    tools.push(serpApiTool);
+    console.log("🔍 SerpAPI tool added to the workflow");
+  } else {
+    console.log("ℹ️ SerpAPI tool not available (no API key provided)");
+  }
+  
+  // Add SQL tool if provided
+  if (sqlTool) {
+    tools.push(sqlTool);
+    console.log("💾 SQL tool added to the workflow");
+  }
+  
+  // Create the tool selection graph
+  const toolSelectionGraph = createToolSelectionGraph(
+    model,
+    calculatorTool,
+    serpApiTool,
+    ragChain,
+    sqlTool
+  );
+  
+  console.log("🔄 Tool selection graph created with the following tools:");
+  tools.forEach(tool => {
+    console.log(`- ${tool.name}: ${tool.description}`);
+  });
+  
+  // Return a wrapper that matches the existing interface
+  return {
+    invoke: async (input: { query: string }) => {
+      console.log("⚡ Invoking LangGraph tool selection workflow");
+      console.log("📝 Query:", input.query);
+      
+      try {
+        // Execute the tool selection graph
+        const result = await toolSelectionGraph.invoke({ 
+          query: input.query 
+        });
+        
+        console.log(`✅ Tool selection workflow completed using: ${result.toolUsed}`);
+        return result.response;
+      } catch (error) {
+        console.error("❌ Error in tool selection workflow:", error);
+        return `I encountered an error while processing your request: ${error}`;
+      }
+    }
+  };
+};
+
 // Create a chain that uses the ReAct agent with calculator and SerpAPI tools
+// Maintains backward compatibility while also supporting the new LangGraph workflow
 export const createAgentChain = (
   model,
   sqlTool,
-  serpApiKey
+  serpApiKey,
+  useLangGraph = true // New parameter to toggle between implementations
 ) => {
+  // If LangGraph is enabled and we have a RAG chain, use the tool selection workflow
+  if (useLangGraph) {
+    // First create the RAG chain that will be used as a fallback
+    const ragChain = createRagChain(model, sqlTool, true);
+    
+    // Then create the tool selection workflow
+    return createToolSelectionWorkflow(model, sqlTool, serpApiKey, ragChain);
+  }
+  
+  // Otherwise, use the original implementation (for backward compatibility)
   // Handle empty serpApiKey gracefully
   const hasSerpApiKey = serpApiKey && serpApiKey.trim() !== "";
   // Create the calculator tool

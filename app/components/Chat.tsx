@@ -100,12 +100,12 @@ const SQL_QUERY_TEMPLATE_VECTOR = `
 // Possible queries
 // select * from emp
 const SQL_QUERY_TEMPLATE = `
-select * from emp
+
 `;
 
 // Possible queries
 // Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
-const SERP_API_QUERY = "";
+const SERP_API_QUERY = "Can you provide the number of wins and losses for each of the top four MLB teams so far this year?";
 
   // Function to fetch SQL query results
   const fetchSqlResults = async (userInput: string): Promise<SqlQueryResult> => {
