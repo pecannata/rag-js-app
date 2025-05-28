@@ -56,6 +56,7 @@ const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrgan
   // Loading states
   const [isLoadingSql, setIsLoadingSql] = useState(false);
   const [isLoadingLlm, setIsLoadingLlm] = useState(false);
+  const [isLoadingSerpApi, setIsLoadingSerpApi] = useState(false);
   
   // Data states
   const [sqlResults, setSqlResults] = useState<SqlQueryResult | null>(null);
@@ -167,6 +168,13 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
       // We're removing the client-side SerpAPI call
       // All tool selection (including SerpAPI) will be handled by the server-side ReACT agent
       
+      // Set loading state for SerpAPI if the query looks like it might use SerpAPI
+      // Simple heuristic: questions about current events, facts, or real-world information
+      const mightUseSerpApi = serpApiKey && /^(?:who|what|when|where|why|how|is|are|was|were|did|do|does|can|could|should|would)/i.test(userMessage.content);
+      if (mightUseSerpApi) {
+        setIsLoadingSerpApi(true);
+      }
+      
       // Step 2: Send message to Cohere API
       setIsLoadingLlm(true);
       
@@ -240,6 +248,7 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
       // Reset all loading states
       setIsLoadingSql(false);
       setIsLoadingLlm(false);
+      setIsLoadingSerpApi(false);
     }
   }; // Close handleSubmit function
 
@@ -331,7 +340,23 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
             </div>
           )}
           
-          {/* Removed SerpAPI loading indicator - SerpAPI calls are now handled on the server side */}
+          {isLoadingSerpApi && serpApiKey && (
+            <div className="flex justify-start">
+              <div className="bg-green-100 text-green-800 rounded-lg px-4 py-2 max-w-md">
+                <div className="flex items-center mb-1">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="font-medium">Searching the Web...</span>
+                </div>
+                <div className="w-full bg-green-200 rounded-full h-1.5">
+                  <div className="bg-green-600 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                </div>
+                <p className="text-xs mt-1">Using SerpAPI to find relevant information</p>
+              </div>
+            </div>
+          )}
           
           {isLoadingLlm && (
             <div className="flex justify-start">
@@ -362,12 +387,12 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
-            disabled={(isLoadingSql || isLoadingLlm) || !apiKey}
+            disabled={(isLoadingSql || isLoadingLlm || isLoadingSerpApi) || !apiKey}
             className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
           />
           <button
             type="submit"
-            disabled={!input.trim() || (isLoadingSql || isLoadingLlm) || !apiKey}
+            disabled={!input.trim() || (isLoadingSql || isLoadingLlm || isLoadingSerpApi) || !apiKey}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-400"
           >
             Send
@@ -375,7 +400,7 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
           <button
             type="button"
             onClick={resetChat}
-            disabled={(isLoadingSql || isLoadingLlm) || messages.length === 0}
+            disabled={(isLoadingSql || isLoadingLlm || isLoadingSerpApi) || messages.length === 0}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:bg-gray-100 disabled:text-gray-400"
           >
             Reset
