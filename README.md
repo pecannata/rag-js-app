@@ -491,338 +491,445 @@ app
 
 ### Comprehensive File Descriptions
 
-#### API Routes
+This section provides an in-depth analysis of each file in the application, detailing implementation specifics, key functions, data flow, and integration points.
 
-##### `app/api/calculator/route.ts`
-**Purpose**: Provides calculator functionality for mathematical operations.
+### Root Files
 
-**Key Functions**:
-- Handles mathematical calculation requests from the frontend
-- Acts as a proxy for LangChain's calculator tool
-- Validates expression inputs before processing
-- Provides structured error handling for calculation failures
+#### `app/layout.tsx`
+
+**Purpose**: Serves as the root layout component that defines the basic HTML structure.
 
 **Implementation Details**:
-- Uses Next.js App Router API route pattern
-- Implements simple request validation for expressions
-- Maintains a consistent API structure with other routes
-- Designed as a proxy to support the ReAct agent's calculator functionality
-
-##### `app/api/chat/route.ts`
-**Purpose**: Handles communication with Cohere's Large Language Model (LLM) and orchestrates RAG and agent-based responses.
-
-**Key Functions**:
-- Receives messages from the frontend and processes them using appropriate chains
-- Manages authentication using the user-provided Cohere API key
-- Intelligently routes requests to either RAG chains or ReAct agent chains based on query content
-- Detects mathematical queries for calculator tool usage
-- Provides error handling for authentication failures, token limits, and other API issues
-
-**Implementation Details**:
-- Uses Next.js App Router API route pattern
-- Implements configurable model selection (currently using 'command-r-plus')
-- Supports a dynamic model selection with different token limits
-- Includes token estimation functionality for optimal prompting
-- Features intelligent query routing between RAG and ReAct agent patterns
-- Detects mathematical queries using pattern matching
-
-##### `app/api/serpapi/route.ts`
-**Purpose**: Integrates with SerpAPI to provide web search capabilities.
-
-**Key Functions**:
-- Executes web search queries via the SerpAPI service
-- Filters and formats search results to optimize for LLM consumption
-- Manages API key authentication with SerpAPI
-- Provides comprehensive error handling for API failures
-
-**Implementation Details**:
-- Uses Next.js App Router API route pattern
-- Implements result filtering to reduce token usage when passing to LLMs
-- Provides controls for including/excluding organic search results
-- Formats various result types (knowledge graph, answer box, organic results)
-- Handles response size optimization with minimal mode
-
-##### `app/api/sql/route.ts`
-**Purpose**: Executes SQL queries against an Oracle database using an external script.
-
-**Key Functions**:
-- Receives SQL query requests from the frontend
-- Executes the SQLclScript.sh bash script with the provided query
-- Parses and formats the JSON results returned by the script
-- Provides comprehensive error handling for script execution and JSON parsing issues
-
-**Implementation Details**:
-- Uses Node.js child_process.execSync to run the external script
-- Handles path resolution for locating the script
-- Implements buffering for large query results
-- Features intelligent JSON extraction from mixed output
-- Formats database responses as structured JSON
-
-#### Components
-
-##### `app/components/Chat.tsx`
-**Purpose**: Main chat interface that manages user interactions, SQL queries, SerpAPI searches, and LLM communication.
-
-**Key Functions**:
-- Displays chat messages with appropriate styling for user and bot messages
-- Handles user input and message submission
-- Executes SQL queries when enabled and formats results
-- Manages SerpAPI search queries and result integration
-- Implements token estimation and truncation to avoid LLM limits
-- Communicates with the API routes for SQL, SerpAPI, and LLM functionality
-- Displays separate loading indicators for SQL, SerpAPI, and LLM operations
-- Provides model information display
-
-**Implementation Details**:
-- Implements a responsive chat interface with message history
-- Uses separate loading states for different operations
-- Manages multiple API integrations in a single workflow
-- Intelligently combines results from different sources
-- Optimizes token usage through result truncation
-- Maintains chat history in state
-- Provides graceful error handling and user feedback
-- Features automatic scrolling to the latest messages
-
-##### `app/components/Sidebar.tsx`
-**Purpose**: Manages API keys and application settings with a user-friendly interface.
-
-**Key Functions**:
-- Provides interfaces for entering and managing both Cohere and SerpAPI keys
-- Validates API key formats and provides feedback
-- Securely stores API keys in local storage
-- Displays API key status (not set, set, invalid)
-- Controls SQL query execution settings
-- Displays model information
-- Provides links to obtain API keys
-
-**Implementation Details**:
-- Uses localStorage for API key persistence between sessions
-- Implements masking for security (only showing first and last 4 characters)
-- Provides edit/save/clear functionality for key management
-- Uses state to track API key validity and edit status
-- Features toggle controls for enabling/disabling SQL queries
-- Displays calculator feature availability
-- Shows active model information when available
-
-#### LangChain Integration Files
-
-##### `app/langchain/agents/react_agent.ts`
-**Purpose**: Implements the ReAct (Reasoning and Acting) agent pattern for enhanced problem-solving capabilities.
-
-**Key Functions**:
-- Creates an agent that can reason about problems and take appropriate actions
-- Specifically handles mathematical calculations with the calculator tool
-- Manages tool selection and execution based on query analysis
-- Processes multi-step reasoning with observation-action loops
-- Integrates with SerpAPI for web search capabilities
-
-**Implementation Details**:
-- Implements a focused calculator agent with reasoning capabilities
-- Uses prompt engineering to guide the agent's decision-making process
-- Features a custom output parser for action extraction
-- Manages iterations between thinking, acting, and observing
-- Provides detailed logging of agent reasoning steps
-
-**Technical Details**:
-- `createCalculatorReactAgent()`: Creates an agent focused on mathematical problem-solving
-- `extractAction()`: Parses LLM output to identify actions and inputs
-- `executeCalculator()`: Handles calculator tool execution and result processing
-- `runAgent()`: Manages the agent's reasoning-action loop with appropriate iteration limits
-- `createSerpApiAgentTool()`: Creates a tool for web search integration
-
-##### `app/langchain/chains.ts`
-**Purpose**: Defines both RAG and agent chains for different query types.
-
-**Key Functions**:
-- Creates a RAG prompt template that incorporates user queries with SQL results
-- Builds chains that process user inputs through appropriate sequences
-- Manages SQL query execution and error handling within chains
-- Integrates with the language model to generate responses
-- Provides agent chain creation for calculator and search functionality
-
-**Implementation Details**:
-- Uses LangChain's RunnableSequence for creating processing pipelines
-- Implements conditional SQL query execution based on configuration
-- Creates SerpAPI tool adapters for web search capabilities
-- Handles intelligent routing between RAG and agent chains
-- Provides comprehensive error handling throughout the chain
-
-**Technical Details**:
-- `createRagPromptTemplate()`: Creates a template for RAG responses
-- `createRagChain()`: Builds the RAG processing chain
-- `createSerpApiToolAdapter()`: Adapts the SerpAPI functionality for agent use
-- `createAgentChain()`: Creates the ReAct agent chain with appropriate tools
-
-##### `app/langchain/memory.ts`
-**Purpose**: Manages conversation history and memory for the LangChain implementation.
-
-**Key Functions**:
-- Creates a conversation memory system using LangChain's ConversationSummaryMemory
-- Initializes the memory with the appropriate Cohere model
-- Configures memory settings for optimal context retention
-
-**Implementation Details**:
-- Uses ConversationSummaryMemory to maintain a condensed version of conversation history
-- Integrates with the Cohere model for summarizing past interactions
-- Configures the memory with appropriate keys for retrieval
-
-**Technical Details**:
-- `createConversationMemory()`: Factory function that creates a properly configured memory instance
-- Uses the same Cohere model for both conversation and memory summarization
-
-##### `app/langchain/models.ts`
-**Purpose**: Manages LLM model configuration and instantiation for LangChain integration.
-
-**Key Functions**:
-- Creates properly configured instances of the Cohere chat model
-- Provides consistent model settings across the application
-- Implements output parsing for standardized response handling
-
-**Implementation Details**:
-- Uses ChatCohere from @langchain/cohere for model integration
-- Configures model parameters like temperature for consistent response quality
-- Provides a StringOutputParser for standardized response formatting
-
-**Technical Details**:
-- `getCohereModel()`: Factory function that creates a properly configured Cohere model instance
-- Default model is set to 'command-r-plus' but can be overridden
-- Temperature is set to 0.7 for a balance of creativity and coherence
-
-##### `app/langchain/tools.ts`
-**Purpose**: Defines tools that can be used by LangChain to interact with external systems.
-
-**Key Functions**:
-- Creates a tool for executing SQL queries against the Oracle database
-- Implements a calculator tool for mathematical operations
-- Wraps existing functionality for integration with LangChain
-- Handles error cases and formats results appropriately
-
-**Implementation Details**:
-- Uses LangChain's DynamicTool for creating flexible external integrations
-- Implements proper error handling and result formatting
-- Provides descriptive tool metadata for agent use
-- Features fallback implementation for calculator functionality
-
-**Technical Details**:
-- `createSqlQueryTool()`: Creates a tool for SQL query execution
-- `createCalculatorTool()`: Creates a tool for mathematical calculations
-- Uses LangChain's built-in calculator when available, with fallback implementation
-- Implements safe evaluation for mathematical expressions
-
-#### Root Files
-
-##### `app/layout.tsx`
-**Purpose**: Root layout component that defines the basic HTML structure.
-
-**Key Functions**:
-- Sets up HTML metadata including title and description
-- Configures font loading and optimization with Geist font family
+- Uses Next.js's built-in font optimization with the Geist font family
+- Implements HTML metadata including title and description
 - Provides the basic page structure for all routes
 - Ensures consistent styling across the application
 
+**Key Functions and Components**:
+- `RootLayout`: The main layout component that receives children elements through props
+- Font configuration using `next/font/google` for optimal loading and display
+
+**Code Example**:
+```tsx
+export const metadata: Metadata = {
+  title: "React NextJS Chat App",
+  description: "Simple chatbot powered by Next.js and React",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+
+#### `app/page.tsx`
+
+**Purpose**: The main entry point of the application that manages state and renders core components.
+
 **Implementation Details**:
-- Uses Next.js's built-in font optimization
-- Configures both sans-serif and monospace font variants
-- Sets up consistent page metadata
-- Provides CSS variable definitions for font families
-
-##### `app/page.tsx`
-**Purpose**: Main page component that serves as the application entry point.
-
-**Key Functions**:
+- Uses the 'use client' directive for client-side rendering
 - Manages application state including API keys and settings
 - Implements the overall application layout with a split-screen design
 - Renders the Sidebar and Chat components
 - Coordinates data flow between components
 
-**Implementation Details**:
-- Uses the 'use client' directive for client-side rendering
-- Manages multiple state variables (API keys, model info, settings)
-- Implements handler functions for state updates
-- Coordinates the passing of props between components
-- Features a responsive layout with sidebar and main content area
+**Key State Variables**:
+- `apiKey`: Stores the Cohere API key for authentication
+- `serpApiKey`: Stores the SerpAPI key for web search functionality
+- `modelInfo`: Tracks information about the active LLM model
+- `runSqlQuery`: Controls whether SQL queries are executed
+- `includeOrganicResults`: Controls whether organic search results are included in SerpAPI responses
 
-##### `app/globals.css`
+**Integration Points**:
+- Imports and renders the `Sidebar` and `Chat` components
+- Passes the API keys and change handlers between components
+- Acts as the bridge between API key management and chat functionality
+- Manages model information display across components
+
+**Code Example**:
+```tsx
+export default function Home() {
+  const [apiKey, setApiKey] = useState<string>('');
+  const [serpApiKey, setSerpApiKey] = useState<string>('');
+  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  const [runSqlQuery, setRunSqlQuery] = useState<boolean>(true);
+  const [includeOrganicResults, setIncludeOrganicResults] = useState<boolean>(false);
+
+  // Handler functions for state updates
+  
+  return (
+    <div className="flex h-screen overflow-hidden">
+      {/* Sidebar on the left */}
+      <Sidebar 
+        onApiKeyChange={handleApiKeyChange}
+        onSerpApiKeyChange={handleSerpApiKeyChange}
+        modelInfo={modelInfo}
+        runSqlQuery={runSqlQuery}
+        onRunSqlQueryChange={handleRunSqlQueryChange}
+        includeOrganicResults={includeOrganicResults}
+        onIncludeOrganicResultsChange={handleIncludeOrganicResultsChange}
+      />
+      
+      {/* Chat area on the right */}
+      <div className="flex-1 overflow-hidden">
+        <Chat 
+          apiKey={apiKey}
+          serpApiKey={serpApiKey}
+          onModelInfoChange={handleModelInfoChange}
+          runSqlQuery={runSqlQuery}
+          includeOrganicResults={includeOrganicResults}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+#### `app/globals.css`
+
 **Purpose**: Global CSS styles and Tailwind configuration.
 
-**Key Functions**:
+**Implementation Details**:
 - Imports Tailwind's base, components, and utilities styles
 - Defines custom variables and global styles
 - Sets up responsive design fundamentals
 - Provides consistent styling throughout the application
 
-**Implementation Details**:
-- Configures Tailwind CSS framework
-- Defines global styling variables
-- Sets up responsive breakpoints
-- Implements consistent typography and spacing
+#### `app/favicon.ico`
 
-##### `app/favicon.ico`
 **Purpose**: Application favicon displayed in browser tabs.
 
 **Implementation Details**:
 - Standard .ico format for browser compatibility
 - Represents the application's visual identity in browser tabs and bookmarks
 
-### Component Relationships and Data Flow
+### Component Files
 
-The application uses a well-structured architecture where components interact in a hierarchical manner:
+#### `app/components/Sidebar.tsx`
 
-1. **Root Layout** (`layout.tsx`) provides the basic HTML structure and font configuration.
+**Purpose**: Manages the display and handling of API keys and application settings.
 
-2. **Main Page** (`page.tsx`) manages the application state and renders the primary components:
-   - Passes API keys (Cohere and SerpAPI) to the Chat component
-   - Manages settings like SQL query execution preferences
-   - Receives state updates from the Sidebar component
-   - Coordinates model information display
+**Implementation Details**:
+- Uses the 'use client' directive for client-side functionality
+- Implements local storage for API key persistence between sessions
+- Provides a secure interface for entering and managing API keys
+- Controls application settings like SQL query execution
+- Displays model and feature information
 
-3. **Sidebar Component** (`components/Sidebar.tsx`):
-   - Manages multiple API key inputs, validation, and storage
-   - Controls application settings like SQL query execution
-   - Displays model and feature information
-   - Communicates changes back to the parent page component
+**Key State Variables**:
+- `apiKey`: Stores the current Cohere API key value
+- `serpApiKey`: Stores the current SerpAPI key value
+- `isEditing`/`isEditingSerpApi`: Controls whether the user is in edit mode for each API key
+- `apiKeyStatus`/`serpApiKeyStatus`: Tracks the status of each API key ('not-set', 'set', or 'invalid')
 
-4. **Chat Component** (`components/Chat.tsx`):
-   - Receives API keys and settings from the page component
-   - Manages user interactions and message display
-   - Orchestrates the workflow between SQL, SerpAPI, and LLM operations
-   - Handles token optimization and result formatting
-   - Interacts with multiple API routes for backend functionality
+**Key Functions**:
+- `handleApiKeyChange`/`handleSerpApiKeyChange`: Updates the API key state and validates input
+- `saveApiKey`/`saveSerpApiKey`: Saves the API key to localStorage and notifies parent component
+- `clearApiKey`/`clearSerpApiKey`: Removes the API key from both state and localStorage
 
-5. **API Routes** provide backend functionality:
-   - `api/sql/route.ts` executes SQL queries and returns results
-   - `api/serpapi/route.ts` performs web searches and formats results
-   - `api/calculator/route.ts` handles mathematical calculations
-   - `api/chat/route.ts` orchestrates LLM interactions with RAG and agent chains
+**Integration Points**:
+- Receives callback functions from parent component for state updates
+- Updates parent component state when API keys or settings change
+- Uses localStorage to persist keys and settings between sessions
 
-6. **LangChain Integration** provides structured workflows:
-   - `langchain/chains.ts` defines both RAG and agent workflows
-   - `langchain/agents/react_agent.ts` implements the ReAct agent pattern
-   - `langchain/tools.ts` wraps SQL, calculator, and search functionality for LangChain
-   - `langchain/models.ts` configures and instantiates the Cohere model
-   - `langchain/memory.ts` manages conversation history
+**UI Components**:
+- API key input fields with validation
+- Masked API key display (showing only first and last 4 characters)
+- Status indicators and action buttons
+- SQL query settings toggle
+- Model information display
+- Links to obtain API keys
 
-The data flow for a typical interaction follows these steps:
+#### `app/components/Chat.tsx`
 
-1. User enters a message in the Chat component
-2. The Chat component analyzes the message to determine required operations
-3. If SQL is enabled, the application executes a query via the SQL API route
-4. If a SerpAPI key is provided and the query type warrants it, a web search is performed
-5. Results from SQL and/or SerpAPI are processed and formatted
-6. The enhanced message (with SQL/SerpAPI results) is sent to the chat API
-7. The chat API route analyzes the message to determine the appropriate processing chain:
-   - For mathematical queries, the ReAct agent with calculator tool is used
-   - For queries that might benefit from web search, the agent with SerpAPI is used
-   - For standard queries, the RAG chain with SQL results is used
-8. The selected chain processes the message using the Cohere model
-9. The response is returned to the Chat component and displayed in the interface
+**Purpose**: Core chat interface that handles user messages, SQL queries, SerpAPI searches, and LLM interaction.
 
-This sophisticated architecture maintains a clean separation of concerns while providing intelligent routing between different processing strategies based on query type. The application demonstrates several advanced patterns:
+**Implementation Details**:
+- Uses the 'use client' directive for client-side functionality
+- Manages complex state for messages, loading states, and API responses
+- Implements token estimation and SQL result truncation to avoid LLM token limits
+- Handles the interaction between user queries and various backend services
+- Displays chat messages with appropriate styling
 
-1. **Multi-tool agent orchestration**: Dynamically selecting and using tools based on query analysis
-2. **Retrieval-Augmented Generation (RAG)**: Enhancing LLM responses with database context
-3. **ReAct pattern implementation**: Enabling reasoning and acting for complex problems
-4. **Fallback mechanisms**: Providing graceful degradation when optional features are unavailable
-5. **Token optimization**: Intelligently managing token usage for large context windows
+**Key Constants**:
+- `SQL_QUERY_TEMPLATE`: Defines the SQL query template sent to the Oracle database
+- `SERP_API_QUERY`: Defines the query template for SerpAPI searches
 
-The result is a highly adaptable and extensible application that can handle a wide range of query types with appropriate processing strategies.
+**Key State Variables**:
+- `messages`: Array of user and bot messages in the chat
+- `isLoadingSql`, `isLoadingLlm`, `isLoadingSerpApi`: Loading states for different operations
+- `sqlResults`: Stores the results of SQL queries
+- `modelInfo`: Information about the Cohere model being used
+
+**Key Functions**:
+- `estimateTokenCount`: Estimates token count for Cohere API limits
+- `fetchSqlResults`: Calls the SQL API endpoint with the defined query
+- `handleSubmit`: Main function that processes user messages and coordinates API calls
+- `resetChat`: Clears the chat history and resets state
+
+**Internal Workflow**:
+1. User enters message and submits the form
+2. If SQL is enabled, a query is executed against the Oracle database
+3. If SerpAPI is available and the query warrants it, a web search may be performed
+4. The enhanced message (with contextual information) is sent to the chat API
+5. The LLM processes the message and returns a response
+6. The response is displayed in the chat interface
+
+**UI Components**:
+- Chat message display with different styling for user and bot messages
+- Progress indicators for SQL, SerpAPI, and LLM operations
+- Message input area with send and reset buttons
+- Model information display at the top of the chat
+
+### API Route Files
+
+#### `app/api/calculator/route.ts`
+
+**Purpose**: Backend API route that provides calculator functionality for mathematical operations.
+
+**Implementation Details**:
+- Uses Next.js API route pattern with POST handler
+- Acts as a proxy for LangChain's calculator tool
+- Validates expression inputs before processing
+- Provides structured error handling for calculation failures
+
+**Key Functions**:
+- `POST`: Handles incoming calculation requests:
+  1. Extracts the mathematical expression from the request
+  2. Validates the expression format
+  3. Returns a success response (actual calculation is handled by LangChain)
+  
+**Error Handling**:
+- Checks for missing expression
+- Provides detailed error responses with appropriate status codes
+- Includes error details in the response body
+
+#### `app/api/chat/route.ts`
+
+**Purpose**: Backend API route that handles communication with Cohere's Large Language Model (LLM) and orchestrates RAG and agent-based responses.
+
+**Implementation Details**:
+- Uses Next.js App Router API route pattern
+- Manages authentication using the user-provided Cohere API key
+- Intelligently routes requests to either RAG chains or ReAct agent chains based on query content
+- Detects mathematical queries for calculator tool usage
+- Integrates with LangChain for model interaction and chain orchestration
+
+**Key Constants**:
+- `COHERE_MODELS`: Configuration for different Cohere models
+- `SELECTED_MODEL`: The currently selected Cohere model (default: 'command-r-plus')
+- `MAX_TOKENS`: Maximum token limit for the selected model
+
+**Key Functions**:
+- `POST`: Main handler for chat requests:
+  1. Extracts message, API key, and chat history from request
+  2. Validates the API key format
+  3. Creates the Cohere model instance
+  4. Creates SQL and calculator tools
+  5. Initializes the agent chain with appropriate tools
+  6. Processes the message and returns the response
+
+**Error Handling**:
+- Specific handling for token limit errors
+- Authentication error detection
+- Comprehensive error responses with appropriate status codes
+
+#### `app/api/serpapi/route.ts`
+
+**Purpose**: Backend API route that integrates with SerpAPI to provide web search capabilities.
+
+**Implementation Details**:
+- Uses Next.js API route pattern with GET handler
+- Communicates with SerpAPI to execute web searches
+- Filters and formats search results for optimal LLM consumption
+- Handles API key authentication and parameter formatting
+
+**Key Functions**:
+- `GET`: Handles search requests:
+  1. Extracts query and API key from request parameters
+  2. Constructs the SerpAPI URL with appropriate parameters
+  3. Sends the request to SerpAPI
+  4. Filters and formats the response based on request parameters
+  5. Returns the formatted search results
+
+**Key Helper Functions**:
+- `filterSerpApiResponse`: Filters SerpAPI responses to extract only essential data, reducing token usage when passing to LLMs
+
+**Response Formatting**:
+- Extracts key information from different result types (knowledge graph, answer box, organic results)
+- Provides controls for including/excluding organic search results
+- Implements response size optimization with minimal mode
+
+#### `app/api/sql/route.ts`
+
+**Purpose**: Backend API route that executes SQL queries against an Oracle database.
+
+**Implementation Details**:
+- Uses Next.js API route pattern with GET handler
+- Executes SQL queries using a direct database connection
+- Parses and formats the JSON results
+- Provides comprehensive error handling
+
+**Key Functions**:
+- `GET`: Handles SQL query requests:
+  1. Gets the SQL query from request URL parameters
+  2. Executes the query against the Oracle database
+  3. Parses the result into structured JSON
+  4. Returns formatted data to client
+
+**Error Handling**:
+- Database connection errors
+- Query execution errors
+- JSON parsing failures
+- Comprehensive error response formatting
+
+### LangChain Integration Files
+
+#### `app/langchain/chains.ts`
+
+**Purpose**: Defines both RAG and agent chains for different query types.
+
+**Implementation Details**:
+- Creates chains for Retrieval Augmented Generation (RAG)
+- Implements agent chains for calculator and SerpAPI integration
+- Provides multishot workflow implementation for complex queries
+- Manages the selection and execution of appropriate tools
+
+**Key Functions**:
+- `createRagPromptTemplate`: Creates a template for RAG responses
+- `createRagChain`: Builds the RAG processing chain
+- `createToolSelectionWorkflow`: Creates a workflow that selects and uses appropriate tools
+- `executeMultishotWorkflow`: Implements a direct approach for queries requiring multiple steps
+- `createAgentChain`: Creates the ReAct agent chain with calculator and SerpAPI tools
+
+**Workflow Patterns**:
+- Single-tool execution for simple queries
+- Multi-tool (multishot) execution for complex queries
+- Fallback mechanisms when tool execution fails
+- Intelligent tool selection based on query analysis
+
+#### `app/langchain/tools.ts`
+
+**Purpose**: Defines tools that can be used by LangChain to interact with external systems.
+
+**Implementation Details**:
+- Creates tools for SQL query execution and mathematical calculations
+- Wraps existing functionality for integration with LangChain
+- Implements error handling and result formatting
+- Provides fallback mechanisms for calculator functionality
+
+**Key Functions**:
+- `createSqlQueryTool`: Creates a tool for SQL query execution
+- `createCalculatorTool`: Creates a tool for mathematical calculations
+
+**Technical Details**:
+- Uses LangChain's `DynamicTool` for creating flexible external integrations
+- Integrates with LangChain's built-in calculator when available
+- Implements safe evaluation for mathematical expressions
+- Provides robust error handling for tool execution
+
+#### `app/langchain/memory.ts`
+
+**Purpose**: Manages conversation history and memory for the LangChain implementation.
+
+**Implementation Details**:
+- Creates a conversation memory system using LangChain's memory components
+- Initializes the memory with the appropriate Cohere model
+- Configures memory settings for optimal context retention
+
+**Key Functions**:
+- `createConversationMemory`: Factory function that creates a properly configured memory instance
+
+**Technical Details**:
+- Uses the same Cohere model for both conversation and memory summarization
+- Configures the memory with appropriate keys for retrieval
+
+#### `app/langchain/models.ts`
+
+**Purpose**: Manages LLM model configuration and instantiation for LangChain integration.
+
+**Implementation Details**:
+- Creates properly configured instances of the Cohere chat model
+- Provides consistent model settings across the application
+- Implements output parsing for standardized response handling
+
+**Key Functions**:
+- `getCohereModel`: Factory function that creates a properly configured Cohere model instance
+- `outputParser`: Provides a StringOutputParser for standardized response formatting
+
+**Configuration Details**:
+- Default model is set to 'command-r-plus' for large context window
+- Temperature is set to 0.7 for a balance of creativity and coherence
+
+#### `app/langchain/agents/react_agent.ts`
+
+**Purpose**: Implements the ReAct (Reasoning and Acting) agent pattern for enhanced problem-solving capabilities.
+
+**Implementation Details**:
+- Creates agents that can reason about problems and take appropriate actions
+- Specifically handles mathematical calculations with the calculator tool
+- Manages tool selection and execution based on query analysis
+- Processes multi-step reasoning with observation-action loops
+
+**Key Functions**:
+- `createMultiToolReactAgent`: Creates an agent that supports multiple tools
+- `createCalculatorReactAgent`: Creates an agent focused on calculator functionality
+- `createReactAgent`: Creates a LangGraph-compatible ReAct agent
+- `extractAction`: Parses LLM output to identify actions and inputs
+- `runAgent`/`runMultiToolAgent`: Manages the agent's reasoning-action loop
+
+**Integration Points**:
+- Works with the calculator tool for mathematical operations
+- Integrates with SerpAPI for web search capabilities
+- Uses LangChain's core components for LLM interaction
+- Provides detailed logging of agent reasoning steps
+
+#### `app/langchain/graphs/tool_selection_graph.ts`
+
+**Purpose**: Implements a complex LangGraph workflow for intelligent tool selection and execution.
+
+**Implementation Details**:
+- Creates a state graph that models the workflow for tool selection
+- Analyzes queries to determine appropriate tools
+- Manages decomposition of complex queries into simpler sub-questions
+- Orchestrates the execution of tools and aggregation of results
+
+**Key Components**:
+- Pattern detection for calculator, SerpAPI, and multishot queries
+- Query decomposition for complex multi-step operations
+- Tool execution nodes for calculator, SerpAPI, and RAG
+- Results collection and aggregation
+- Error handling and fallback mechanisms
+
+**Graph Structure**:
+- `queryAnalysisNode`: Analyzes the query to determine the appropriate tool
+- `decompositionNode`: Breaks down complex queries into sub-questions
+- `calculatorNode`/`serpApiNode`/`ragNode`: Execute specific tools
+- `subQuestionRouterNode`: Routes sub-questions to appropriate tools
+- `resultsCollectorNode`: Collects results from tool execution
+- `aggregationNode`: Synthesizes results into a final response
+
+**Workflow Patterns**:
+- Simple single-tool execution for straightforward queries
+- Multi-tool execution with dependencies for complex queries
+- Fallback mechanisms when tools fail or when facing errors
+- Timeout protection to prevent hanging operations
+
+### Empty Directories
+
+#### `app/api/google-search`
+
+**Purpose**: Directory prepared for Google Search API integration as a fallback to SerpAPI.
+
+**Current Status**: Empty directory, awaiting implementation.
+
+**Expected Implementation**: Will contain a `route.ts` file similar to the SerpAPI implementation but using Google's Custom Search API instead.
