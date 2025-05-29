@@ -82,7 +82,7 @@ const SQL_QUERY_TEMPLATE = `
 `;
 
 // Hardcoded SerpAPI query - this will be sent to the server for execution
-// The server-side ReACT agent will decide whether to use it based on the user's input
+// Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
 const SERP_API_QUERY = "Can you provide the number of wins and losses for each of the top four MLB teams so far this year?";
 
   // Function to fetch SQL query results
@@ -168,10 +168,18 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
       // We're removing the client-side SerpAPI call
       // All tool selection (including SerpAPI) will be handled by the server-side ReACT agent
       
-      // Set loading state for SerpAPI if the query looks like it might use SerpAPI
-      // Simple heuristic: questions about current events, facts, or real-world information
-      const mightUseSerpApi = serpApiKey && /^(?:who|what|when|where|why|how|is|are|was|were|did|do|does|can|could|should|would)/i.test(userMessage.content);
+      // Set loading state for SerpAPI if:
+      // 1. We have a SerpAPI key
+      // 2. The query looks like it might need web search (starts with question words)
+      // 3. We have a non-empty SERP_API_QUERY to send
+      const mightUseSerpApi = 
+        serpApiKey && 
+        SERP_API_QUERY && 
+        SERP_API_QUERY.trim() !== "" && 
+        /^(?:who|what|when|where|why|how|is|are|was|were|did|do|does|can|could|should|would)/i.test(userMessage.content);
+      
       if (mightUseSerpApi) {
+        console.log("Query might use SerpAPI, showing loading indicator");
         setIsLoadingSerpApi(true);
       }
       
@@ -199,8 +207,9 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
           sqlQuery: SQL_QUERY_TEMPLATE,
           // Pass the SerpAPI key and hardcoded query to the server
           // The server-side ReACT agent will decide whether to use SerpAPI based on the user's query
+          // Only pass the SerpAPI key and query if both exist and the query is non-empty
           serpApiKey: serpApiKey,
-          serpApiQuery: SERP_API_QUERY
+          serpApiQuery: SERP_API_QUERY && SERP_API_QUERY.trim() !== "" ? SERP_API_QUERY : undefined
         })
       });
       
@@ -340,7 +349,7 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
             </div>
           )}
           
-          {isLoadingSerpApi && serpApiKey && (
+          {isLoadingSerpApi && serpApiKey && SERP_API_QUERY && SERP_API_QUERY.trim() !== "" && (
             <div className="flex justify-start">
               <div className="bg-green-100 text-green-800 rounded-lg px-4 py-2 max-w-md">
                 <div className="flex items-center mb-1">
@@ -353,7 +362,7 @@ const SERP_API_QUERY = "Can you provide the number of wins and losses for each o
                 <div className="w-full bg-green-200 rounded-full h-1.5">
                   <div className="bg-green-600 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
                 </div>
-                <p className="text-xs mt-1">Using SerpAPI to find relevant information</p>
+                <p className="text-xs mt-1">Using SerpAPI to find relevant information about: {SERP_API_QUERY.substring(0, 50)}{SERP_API_QUERY.length > 50 ? "..." : ""}</p>
               </div>
             </div>
           )}
