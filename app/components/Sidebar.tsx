@@ -335,22 +335,6 @@ const Sidebar = ({
         </div>
       </div>
       
-      {/* Calculator Section */}
-      <div className="mb-6">
-        <h2 className="text-sm font-medium mb-2">Calculator</h2>
-        <div className="bg-green-50 p-3 rounded-md border border-green-200">
-          <div className="flex items-center space-x-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-            <span className="text-sm font-medium text-green-800">Calculator Enabled</span>
-          </div>
-          <p className="text-xs text-gray-600 mt-2">
-            The AI can now automatically detect when calculations are needed and use a calculator tool powered by LangGraph and ReAct.
-          </p>
-        </div>
-      </div>
-      
       {/* Model Information Section */}
       <div className="mb-6 mt-4">
         <h2 className="text-sm font-medium mb-2">Cohere Model</h2>
