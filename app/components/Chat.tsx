@@ -78,7 +78,7 @@ const SQL_QUERY_TEMPLATE_VECTOR = `
 // Possible queries
 // select * from emp
 const SQL_QUERY_TEMPLATE = `
-select * from emp
+
 `;
 
 // Hardcoded SerpAPI query - this will be sent to the server for execution

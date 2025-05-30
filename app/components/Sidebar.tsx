@@ -144,7 +144,7 @@ const Sidebar = ({
       
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-medium">API Key</h2>
+          <h2 className="text-sm font-medium">Cohere API Key</h2>
           {apiKeyStatus === 'set' && !isEditing && (
             <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
               <span className="w-2 h-2 mr-1 rounded-full bg-green-500"></span>
