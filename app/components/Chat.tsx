@@ -133,34 +133,32 @@ const SERP_API_QUERY = "";
     setInput(''); // Clear input field
     
     try {
-      // Step 1: Fetch SQL results and enhance the message if SQL is enabled
+      const hasSqlQuery = SQL_QUERY_TEMPLATE.trim() !== '';
+      const hasSerpQuery = SERP_API_QUERY.trim() !== '';
+      
+      // Update SerpAPI loading state
+      const mightUseSerpApi = serpApiKey && hasSerpQuery;
+      if (mightUseSerpApi) {
+        console.log("Query might use SerpAPI, showing loading indicator");
+        setIsLoadingSerpApi(true);
+      }
+
+      // Execute SQL query if enabled and template exists
       let enhancedMessage = userMessage.content;
       let sqlData: SqlQueryResult | null = null;
-      
-      // Fetch SQL results if enabled
-      if (runSqlQuery) {
+
+      if (runSqlQuery && hasSqlQuery) {
         setIsLoadingSql(true);
         try {
-          // Execute SQL query with user message content
           sqlData = await fetchSqlResults(userMessage.content);
           setSqlResults(sqlData);
           
-          // No need for replacement in the simple query
-          const sqlQuery = SQL_QUERY_TEMPLATE;
-          
-          // Format the results and enhance the message
+          // Append SQL results to the message
           const formattedResults = JSON.stringify(sqlData, null, 2);
-          enhancedMessage = `${userMessage.content}\n\nSQL Results (${sqlQuery}):\n${formattedResults}`;
-          
-          // Log debug information (without duplicating SQL results)
-          const estimatedTokens = estimateTokenCount(enhancedMessage);
-          console.log('Message preview:', userMessage.content.slice(0, 50), '...');
-          console.log(`SQL results retrieved and appended to message (${enhancedMessage.length} chars, ~${estimatedTokens} tokens)`);
-          
-          // No additional truncation needed with command-r-plus model (128K token limit)
+          enhancedMessage = `${enhancedMessage}\n\nSQL Query (${SQL_QUERY_TEMPLATE.trim()}) Results:\n${formattedResults}`;
         } catch (sqlError) {
           console.error('Failed to fetch SQL results:', sqlError);
-          // Continue with the original message if SQL fetch fails
+          // Continue with original message if SQL fails
         } finally {
           setIsLoadingSql(false);
         }
@@ -169,20 +167,7 @@ const SERP_API_QUERY = "";
       // We're removing the client-side SerpAPI call
       // All tool selection (including SerpAPI) will be handled by the server-side ReACT agent
       
-      // Set loading state for SerpAPI if:
-      // 1. We have a SerpAPI key
-      // 2. The query looks like it might need web search (starts with question words)
-      // 3. We have a non-empty SERP_API_QUERY to send
-      const mightUseSerpApi = 
-        serpApiKey && 
-        SERP_API_QUERY && 
-        SERP_API_QUERY.trim() !== "" && 
-        /^(?:who|what|when|where|why|how|is|are|was|were|did|do|does|can|could|should|would)/i.test(userMessage.content);
-      
-      if (mightUseSerpApi) {
-        console.log("Query might use SerpAPI, showing loading indicator");
-        setIsLoadingSerpApi(true);
-      }
+      // Note: SerpAPI loading state is now handled at the start of the function
       
       // Step 2: Send message to Cohere API
       setIsLoadingLlm(true);
@@ -193,26 +178,20 @@ const SERP_API_QUERY = "";
         message: msg.content
       }));
       
-      // Call API with the message and additional parameters
+      // Call API with the enhanced message (including SQL results if any)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          // Send the enhanced message that includes SQL results if available
-          message: enhancedMessage, 
+        body: JSON.stringify({
+          message: enhancedMessage,
           apiKey,
           chatHistory,
-          // Only set runSqlQuery to true if the message is not empty and SQL template is not empty
-          runSqlQuery: runSqlQuery && userMessage.content.trim() !== '' && SQL_QUERY_TEMPLATE.trim() !== '', // Don't run SQL if template is empty
-          // Pass the predefined SQL query so that chains.ts has a valid SQL query to execute
+          isSqlOnlyQuery: false, // Always false here since SQL-only queries are handled earlier
+          runSqlQuery: runSqlQuery && userMessage.content.trim() !== '' && SQL_QUERY_TEMPLATE.trim() !== '',
           sqlQuery: SQL_QUERY_TEMPLATE,
-          // Pass the SerpAPI key and hardcoded query to the server
-          // The server-side ReACT agent will decide whether to use SerpAPI based on the user's query
-          // Only pass the SerpAPI key and query if both exist and the query is non-empty
-          serpApiKey: serpApiKey,
-          serpApiQuery: SERP_API_QUERY && SERP_API_QUERY.trim() !== "" ? SERP_API_QUERY : undefined,
-          // Pass the multi-shot agentic AI setting
-          useMultiShotAI: useMultiShotAI
+          serpApiKey: mightUseSerpApi ? serpApiKey : undefined,
+          serpApiQuery: mightUseSerpApi ? SERP_API_QUERY : undefined,
+          useMultiShotAI
         })
       });
       
@@ -246,8 +225,6 @@ const SERP_API_QUERY = "";
         { role: 'bot', content: data.response }
       ]);
       
-      // Log that we've sent the message to the LLM with hardcoded queries
-      console.log('Sent message to LLM with hardcoded SQL and SerpAPI queries');
     } catch (error) {
       console.error('Error sending message:', error);
       
@@ -355,7 +332,7 @@ const SERP_API_QUERY = "";
             </div>
           )}
           
-          {isLoadingSerpApi && serpApiKey && SERP_API_QUERY && SERP_API_QUERY.trim() !== "" && (
+          {isLoadingSerpApi && serpApiKey && hasSerpQuery && !(hasSqlQuery && !hasSerpQuery) && (
             <div className="flex justify-start">
               <div className="bg-green-100 text-green-800 rounded-lg px-4 py-2 max-w-md">
                 <div className="flex items-center mb-1">
