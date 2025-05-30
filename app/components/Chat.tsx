@@ -15,6 +15,7 @@ interface ChatProps {
   onModelInfoChange?: (modelInfo: ModelInfo | null) => void;
   runSqlQuery: boolean;
   includeOrganicResults?: boolean;
+  useMultiShotAI?: boolean; // Add this line
 }
 
 // Type for SQL query result
@@ -46,7 +47,7 @@ const estimateTokenCount = (text: string): number => {
 };
 
 
-const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrganicResults = false }: ChatProps) => {
+const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrganicResults = false, useMultiShotAI = false }: ChatProps) => {
   // State declarations grouped by functionality
   // UI states
   const [input, setInput] = useState('');
@@ -83,7 +84,7 @@ const SQL_QUERY_TEMPLATE = `
 
 // Hardcoded SerpAPI query - this will be sent to the server for execution
 // Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
-const SERP_API_QUERY = "";
+const SERP_API_QUERY = "Can you provide the number of wins and losses for each of the top four MLB teams so far this year?";
 
   // Function to fetch SQL query results
   const fetchSqlResults = async (userInput: string): Promise<SqlQueryResult> => {
@@ -192,7 +193,7 @@ const SERP_API_QUERY = "";
         message: msg.content
       }));
       
-      // Call API with the message and runSqlQuery parameter
+      // Call API with the message and additional parameters
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -209,7 +210,9 @@ const SERP_API_QUERY = "";
           // The server-side ReACT agent will decide whether to use SerpAPI based on the user's query
           // Only pass the SerpAPI key and query if both exist and the query is non-empty
           serpApiKey: serpApiKey,
-          serpApiQuery: SERP_API_QUERY && SERP_API_QUERY.trim() !== "" ? SERP_API_QUERY : undefined
+          serpApiQuery: SERP_API_QUERY && SERP_API_QUERY.trim() !== "" ? SERP_API_QUERY : undefined,
+          // Pass the multi-shot agentic AI setting
+          useMultiShotAI: useMultiShotAI
         })
       });
       
@@ -286,6 +289,9 @@ const SERP_API_QUERY = "";
             )}
             <span className={`px-2 py-0.5 rounded-full text-xs ${serpApiKey ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
               SerpAPI: {serpApiKey ? 'Enabled' : 'Disabled'}
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-xs ${useMultiShotAI ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-500'}`}>
+              Multi-shot AI: {useMultiShotAI ? 'Enabled' : 'Disabled'}
             </span>
           </div>
         </div>

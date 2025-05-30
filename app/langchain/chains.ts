@@ -730,63 +730,50 @@ export const createAgentChain = (
   model,
   sqlTool,
   serpApiKey,
-  useLangGraph = true // New parameter to toggle between implementations
+  useMultiShotAI = false // Renamed from useLangGraph to useMultiShotAI
 ) => {
-  // If LangGraph is enabled and we have a RAG chain, use the tool selection workflow
-  if (useLangGraph) {
-    // First create the RAG chain that will be used as a fallback
-    const ragChain = createRagChain(model, sqlTool, true);
+  // First create the RAG chain that will be used as a fallback or direct access
+  const ragChain = createRagChain(model, sqlTool, true);
+  
+  // If multi-shot AI is disabled, create a wrapper that bypasses tool selection
+  // when both SQL and SerpAPI queries are empty
+  if (!useMultiShotAI) {
+    console.log("🔄 Multi-shot Agentic AI is disabled, will use RAG directly when possible");
     
-    // Then create the tool selection workflow
-    return createToolSelectionWorkflow(model, sqlTool, serpApiKey, ragChain);
+    return {
+      invoke: async (input) => {
+        console.log("📝 Query:", input.query);
+        
+        // Check if both SQL and SerpAPI queries are empty
+        const sqlQueryEmpty = !input.sqlQuery || input.sqlQuery.trim() === '';
+        const serpApiQueryEmpty = !input.serpApiQuery || input.serpApiQuery.trim() === '';
+        
+        // If both are empty, bypass tool selection and go straight to RAG
+        if (sqlQueryEmpty && serpApiQueryEmpty) {
+          console.log("⏩ Bypassing tool selection, going straight to LLM with RAG");
+          try {
+            const result = await ragChain.invoke({
+              query: input.query,
+              sqlQuery: input.sqlQuery || ""
+            });
+            console.log("✅ RAG execution completed successfully");
+            return result;
+          } catch (error) {
+            console.error("❌ Error invoking RAG chain:", error);
+            return `I encountered an error while processing your request: ${error}`;
+          }
+        } else {
+          // If either SQL or SerpAPI query is present, use the tool selection workflow
+          console.log("🔄 SQL or SerpAPI query is present, using tool selection workflow");
+          const toolSelectionChain = createToolSelectionWorkflow(model, sqlTool, serpApiKey, ragChain);
+          return await toolSelectionChain.invoke(input);
+        }
+      }
+    };
   }
   
-  // Otherwise, use the original implementation (for backward compatibility)
-  // Handle empty serpApiKey gracefully
-  const hasSerpApiKey = serpApiKey && serpApiKey.trim() !== "";
-  // Create the calculator tool
-  const calculatorTool = createCalculatorTool();
-  console.log("📊 Calculator tool created and ready to use");
-  console.log("Calculator tool details:", {
-    name: calculatorTool.name,
-    description: calculatorTool.description
-  });
-  
-  // Create the SerpAPI tool only if a valid key is provided
-  const serpApiTool = hasSerpApiKey ? createSerpApiToolAdapter(serpApiKey) : null;
-  
-  // Log SerpAPI tool availability
-  if (hasSerpApiKey) {
-    console.log("🔍 SerpAPI tool created and ready to use");
-  } else {
-    console.log("ℹ️ SerpAPI tool not available (no API key provided)");
-  }
-  
-  // Create the ReAct agent with available tools
-  // Pass the serpApiTool only if it's available
-  const agent = hasSerpApiKey 
-    ? createCalculatorReactAgent(model, calculatorTool, sqlTool, serpApiTool)
-    : createCalculatorReactAgent(model, calculatorTool, sqlTool, null);
-  
-  // Return a function that invokes the agent
-  return {
-    invoke: async (input) => {
-      console.log("⚡ Invoking ReAct agent with calculator and SerpAPI tools");
-      console.log("📝 Query:", input.query);
-      if (input.serpApiQuery) {
-        console.log("📝 SerpAPI Query available:", input.serpApiQuery.substring(0, 50) + (input.serpApiQuery.length > 50 ? "..." : ""));
-      }
-      console.log("🔄 The agent will now decide which tools to use (if any)...");
-      
-      try {
-        const result = await agent.invoke({ input: input.query });
-        console.log("✅ Agent execution completed successfully");
-        return result.output;
-      } catch (error) {
-        console.error("❌ Error invoking agent:", error);
-        return `I encountered an error while processing your request: ${error}`;
-      }
-    }
-  };
+  // If multi-shot AI is enabled, use the tool selection workflow
+  console.log("🔄 Multi-shot Agentic AI is enabled, using full tool selection workflow");
+  return createToolSelectionWorkflow(model, sqlTool, serpApiKey, ragChain);
 };
 

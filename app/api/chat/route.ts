@@ -12,6 +12,7 @@ interface ChatRequestBody {
   sqlQuery?: string;
   serpApiKey?: string;
   serpApiQuery?: string; // Add serpApiQuery parameter to handle hardcoded SerpAPI query from client
+  useMultiShotAI?: boolean; // Add useMultiShotAI parameter to control agent behavior
 }
 
 // Interface for chat messages
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body = await request.json() as ChatRequestBody;
-    const { message, apiKey, chatHistory = [], runSqlQuery = true, sqlQuery = "", serpApiKey, serpApiQuery = "" } = body;
+    const { message, apiKey, chatHistory = [], runSqlQuery = true, sqlQuery = "", serpApiKey, serpApiQuery = "", useMultiShotAI = false } = body;
     
     // Validate the API key format
     if (!isValidCohereApiKey(apiKey)) {
@@ -145,8 +146,11 @@ export async function POST(request: NextRequest) {
       console.log("🔍 SerpAPI query available:", serpApiQuery.substring(0, 100) + (serpApiQuery.length > 100 ? "..." : ""));
     }
     
-    // Create the agent chain with LangGraph enabled (passing true as the last parameter)
-    const chain = createAgentChain(model, sqlTool, serpApiKey || "", true);
+    // Log the multi-shot agentic AI setting
+    console.log(`🤖 Multi-shot Agentic AI: ${useMultiShotAI ? 'Enabled' : 'Disabled'}`);
+    
+    // Create the agent chain with LangGraph and pass the useMultiShotAI parameter
+    const chain = createAgentChain(model, sqlTool, serpApiKey || "", useMultiShotAI);
     
     // Execute the workflow - it will automatically select the appropriate tool
     const result = await chain.invoke({

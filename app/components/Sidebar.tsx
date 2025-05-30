@@ -16,6 +16,8 @@ interface SidebarProps {
   onRunSqlQueryChange: (runSqlQuery: boolean) => void;
   includeOrganicResults?: boolean;
   onIncludeOrganicResultsChange: (includeOrganicResults: boolean) => void;
+  useMultiShotAI?: boolean;
+  onUseMultiShotAIChange: (useMultiShotAI: boolean) => void;
 }
 
 const Sidebar = ({ 
@@ -25,7 +27,9 @@ const Sidebar = ({
   runSqlQuery, 
   onRunSqlQueryChange,
   includeOrganicResults = false, 
-  onIncludeOrganicResultsChange
+  onIncludeOrganicResultsChange,
+  useMultiShotAI = false,
+  onUseMultiShotAIChange
 }: SidebarProps) => {
   // Cohere API key state
   const [apiKey, setApiKey] = useState<string>('');
@@ -330,6 +334,28 @@ const Sidebar = ({
             {runSqlQuery 
               ? "SQL query results will be included with each message"
               : "SQL queries are disabled, using direct AI responses only"
+            }
+          </p>
+        </div>
+      </div>
+      
+      {/* Multi-shot Agentic AI Settings Section */}
+      <div className="mb-6">
+        <h2 className="text-sm font-medium mb-2">Agent Settings</h2>
+        <div className="bg-gray-100 p-3 rounded-md border border-gray-200">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useMultiShotAI}
+              onChange={(e) => onUseMultiShotAIChange(e.target.checked)}
+              className="form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm">Use multi-shot Agentic AI</span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1">
+            {useMultiShotAI 
+              ? "Enables advanced multi-step reasoning and tool selection"
+              : "Queries will go directly to the LLM when possible"
             }
           </p>
         </div>

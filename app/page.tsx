@@ -16,6 +16,7 @@ export default function Home() {
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
   const [runSqlQuery, setRunSqlQuery] = useState<boolean>(true);
   const [includeOrganicResults, setIncludeOrganicResults] = useState<boolean>(false); // Default to excluding organic results
+  const [useMultiShotAI, setUseMultiShotAI] = useState<boolean>(false); // Default to not using multi-shot agentic AI
 
   const handleApiKeyChange = (newApiKey: string) => {
     setApiKey(newApiKey);
@@ -37,6 +38,10 @@ export default function Home() {
     setIncludeOrganicResults(newIncludeOrganicResults);
   };
 
+  const handleUseMultiShotAIChange = (newUseMultiShotAI: boolean) => {
+    setUseMultiShotAI(newUseMultiShotAI);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar on the left */}
@@ -48,6 +53,8 @@ export default function Home() {
         onRunSqlQueryChange={handleRunSqlQueryChange}
         includeOrganicResults={includeOrganicResults}
         onIncludeOrganicResultsChange={handleIncludeOrganicResultsChange}
+        useMultiShotAI={useMultiShotAI}
+        onUseMultiShotAIChange={handleUseMultiShotAIChange}
       />
       
       {/* Chat area on the right */}
@@ -58,6 +65,7 @@ export default function Home() {
           onModelInfoChange={handleModelInfoChange}
           runSqlQuery={runSqlQuery}
           includeOrganicResults={includeOrganicResults}
+          useMultiShotAI={useMultiShotAI}
         />
       </div>
     </div>
