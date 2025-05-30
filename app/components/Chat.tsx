@@ -46,6 +46,12 @@ const estimateTokenCount = (text: string): number => {
   return Math.ceil(charCount / 4 + numberCount * 0.5 + symbolCount * 0.5);
 };
 
+// Helper function to check if a query might be a calculator query
+const mightBeCalculatorQuery = (query: string): boolean => {
+  // Check for mathematical expressions: numbers and operators
+  const calculatorPattern = /[-+*/\d()%^]+/;
+  return calculatorPattern.test(query.replace(/\s/g, ''));
+};
 
 const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrganicResults = false, useMultiShotAI = false }: ChatProps) => {
   // State declarations grouped by functionality
@@ -136,6 +142,13 @@ const SERP_API_QUERY = "";
       const hasSqlQuery = SQL_QUERY_TEMPLATE.trim() !== '';
       const hasSerpQuery = SERP_API_QUERY.trim() !== '';
       
+      // Determine if we should bypass tool selection and go directly to LLM
+      const shouldUseDirectLlm = 
+        !hasSqlQuery && 
+        !hasSerpQuery && 
+        !useMultiShotAI && 
+        !mightBeCalculatorQuery(userMessage.content);
+      
       // Update SerpAPI loading state
       const mightUseSerpApi = serpApiKey && hasSerpQuery;
       if (mightUseSerpApi) {
@@ -186,6 +199,7 @@ const SERP_API_QUERY = "";
           message: enhancedMessage,
           apiKey,
           chatHistory,
+          useDirectLlm: shouldUseDirectLlm, // Add flag for direct LLM processing
           isSqlOnlyQuery: false, // Always false here since SQL-only queries are handled earlier
           runSqlQuery: runSqlQuery && userMessage.content.trim() !== '' && SQL_QUERY_TEMPLATE.trim() !== '',
           sqlQuery: SQL_QUERY_TEMPLATE,

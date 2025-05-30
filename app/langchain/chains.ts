@@ -797,7 +797,7 @@ export const createAgentChain = (
         } 
         // If both SQL and SerpAPI queries are empty, bypass tool selection and go straight to RAG
         else if (sqlQueryEmpty && serpApiQueryEmpty) {
-          console.log("⏩ Bypassing tool selection, going straight to LLM with RAG");
+console.log("Bypassing tool selection, going straight to LLM");
           try {
             const result = await ragChain.invoke({
               query: input.query,
