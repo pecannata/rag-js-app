@@ -11,6 +11,13 @@ import { createToolSelectionGraph } from './graphs/tool_selection_graph';
 import { Tool } from 'langchain-core/tools';
 import { BaseChatModel } from 'langchain-core/language_models/chat_models';
 
+// Helper function to detect calculator queries
+const mightBeCalculatorQuery = (query: string): boolean => {
+  // Check for mathematical expressions: numbers and operators
+  const calculatorPattern = /[-+*/\d()%^]+/;
+  return calculatorPattern.test(query.replace(/\s/g, ''));
+};
+
 // Create a RAG prompt template that includes SQL results
 export const createRagPromptTemplate = () => {
   return PromptTemplate.fromTemplate(`
@@ -748,9 +755,23 @@ export const createAgentChain = (
       invoke: async (input) => {
         console.log("📝 Query:", input.query);
         
-        // Check if both SQL and SerpAPI queries are empty
+        // Check conditions for direct tool usage
         const sqlQueryEmpty = !input.sqlQuery || input.sqlQuery.trim() === '';
         const serpApiQueryEmpty = !input.serpApiQuery || input.serpApiQuery.trim() === '';
+        const isCalculatorQuery = mightBeCalculatorQuery(input.query);
+        
+        // Use calculator tool directly if conditions are met
+        if (sqlQueryEmpty && serpApiQueryEmpty && !useMultiShotAI && isCalculatorQuery) {
+          console.log("🧮 Using calculator tool directly for mathematical query");
+          try {
+            const calculatorTool = createCalculatorTool();
+            const result = await calculatorTool.invoke(input.query);
+            return `The calculation result is: ${result}`;
+          } catch (error) {
+            console.error("❌ Error using calculator tool:", error);
+            return `I encountered an error while performing the calculation: ${error}`;
+          }
+        }
         
         // If SerpAPI query is not empty, execute it and append results to the query
         if (!serpApiQueryEmpty && serpApiKey) {
