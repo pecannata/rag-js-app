@@ -74,6 +74,9 @@ const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrgan
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
   
+// SQL Templates and Processing
+// ---------------------------
+
 // SQL query template - do not remove SQL_QUERY_TEMPLATE_VECTOR
 const SQL_QUERY_TEMPLATE_VECTOR = `
             SELECT seg
@@ -88,40 +91,66 @@ const SQL_QUERY_TEMPLATE = `
 
 `;
 
+// Function to execute SQL query and return results
+const fetchSqlResults = async (userInput: string): Promise<SqlQueryResult> => {
+  try {
+    // Generate the SQL query using the template and user input
+    const sqlQuery = SQL_QUERY_TEMPLATE.replace('{{USER_INPUT}}', userInput);
+    
+    // Encode the SQL query for URL usage
+    const encodedQuery = encodeURIComponent(sqlQuery);
+    
+    // Append the query parameter to the endpoint URL
+    const response = await fetch(`/api/sql?query=${encodedQuery}`);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || 
+        `Failed to fetch SQL results: ${response.status} ${response.statusText}`
+      );
+    }
+    
+    const data = await response.json();
+    console.log('SQL query completed successfully');
+    return data;
+  } catch (error) {
+    console.error('Error fetching SQL results:', error);
+    throw error;
+  }
+};
+
+// Process SQL query and enhance message with results
+const processSqlQuery = async (
+  userMessage: string,
+  setIsLoadingSql: (loading: boolean) => void,
+  setSqlResults: (results: SqlQueryResult | null) => void
+): Promise<string> => {
+  let enhancedMessage = userMessage;
+  
+  try {
+    setIsLoadingSql(true);
+    const sqlData = await fetchSqlResults(userMessage);
+    setSqlResults(sqlData);
+    
+    // Append SQL results to the message
+    const formattedResults = JSON.stringify(sqlData, null, 2);
+    enhancedMessage = `${enhancedMessage}\n\nSQL Query (${SQL_QUERY_TEMPLATE.trim()}) Results:\n${formattedResults}`;
+  } catch (sqlError) {
+    console.error('Failed to fetch SQL results:', sqlError);
+    // Continue with original message if SQL fails
+  } finally {
+    setIsLoadingSql(false);
+  }
+  
+  return enhancedMessage;
+};
+
 // Hardcoded SerpAPI query - this will be sent to the server for execution
 // Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
 const SERP_API_QUERY = "";
 
-  // Function to fetch SQL query results
-  const fetchSqlResults = async (userInput: string): Promise<SqlQueryResult> => {
-    try {
-      // Generate the SQL query using the template and user input
-      const sqlQuery = SQL_QUERY_TEMPLATE.replace('{{USER_INPUT}}', userInput);
-      
-      // Encode the SQL query for URL usage
-      const encodedQuery = encodeURIComponent(sqlQuery);
-      
-      // Append the query parameter to the endpoint URL
-      const response = await fetch(`/api/sql?query=${encodedQuery}`);
-      
-      if (!response.ok) {
-        // Handle HTTP errors
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.error || 
-          `Failed to fetch SQL results: ${response.status} ${response.statusText}`
-        );
-      }
-      
-      const data = await response.json();
-      // SQL results are already logged in the SQL route, so we don't log them again here
-      console.log('SQL query completed successfully');
-      return data;
-    } catch (error) {
-      console.error('Error fetching SQL results:', error);
-      throw error;
-    }
-  };
+  // SQL processing functions moved to SQL Templates section above
 
 // We're removing the fetchSerpApiResults function since we're no longer making client-side SerpAPI calls
 // All tool selection and execution will happen on the server side through the ReACT agent
@@ -156,25 +185,15 @@ const SERP_API_QUERY = "";
         setIsLoadingSerpApi(true);
       }
 
-      // Execute SQL query if enabled and template exists
+      // Process SQL query if enabled and template exists
       let enhancedMessage = userMessage.content;
-      let sqlData: SqlQueryResult | null = null;
-
+      
       if (runSqlQuery && hasSqlQuery) {
-        setIsLoadingSql(true);
-        try {
-          sqlData = await fetchSqlResults(userMessage.content);
-          setSqlResults(sqlData);
-          
-          // Append SQL results to the message
-          const formattedResults = JSON.stringify(sqlData, null, 2);
-          enhancedMessage = `${enhancedMessage}\n\nSQL Query (${SQL_QUERY_TEMPLATE.trim()}) Results:\n${formattedResults}`;
-        } catch (sqlError) {
-          console.error('Failed to fetch SQL results:', sqlError);
-          // Continue with original message if SQL fails
-        } finally {
-          setIsLoadingSql(false);
-        }
+        enhancedMessage = await processSqlQuery(
+          userMessage.content,
+          setIsLoadingSql,
+          setSqlResults
+        );
       }
       
       // We're removing the client-side SerpAPI call
