@@ -748,8 +748,51 @@ export const createAgentChain = (
         const sqlQueryEmpty = !input.sqlQuery || input.sqlQuery.trim() === '';
         const serpApiQueryEmpty = !input.serpApiQuery || input.serpApiQuery.trim() === '';
         
-        // If both are empty, bypass tool selection and go straight to RAG
-        if (sqlQueryEmpty && serpApiQueryEmpty) {
+        // If SerpAPI query is not empty, execute it and append results to the query
+        if (!serpApiQueryEmpty && serpApiKey) {
+          console.log("🔍 SerpAPI query is not empty, executing and appending results to query");
+          try {
+            // Create a SerpAPI tool adapter for this query
+            const serpApiTool = createSerpApiToolAdapter(serpApiKey);
+            
+            // Execute the SerpAPI query
+            console.log("🔍 Executing SerpAPI query:", input.serpApiQuery);
+            const serpApiResult = await serpApiTool.invoke({ query: input.serpApiQuery });
+            console.log("🔍 SerpAPI query completed successfully");
+            
+            // Format the SerpAPI result as a string if it's not already
+            let serpApiResultString = "";
+            if (typeof serpApiResult === 'string') {
+              serpApiResultString = serpApiResult;
+            } else {
+              serpApiResultString = JSON.stringify(serpApiResult, null, 2);
+            }
+            
+            // Enhance the user query with the SerpAPI results
+            const enhancedQuery = `${input.query}\n\nHere is some relevant information from the web:\n${serpApiResultString}`;
+            console.log("🔍 Enhanced query with SerpAPI results");
+            
+            // Send the enhanced query to the RAG chain
+            const result = await ragChain.invoke({
+              query: enhancedQuery,
+              sqlQuery: input.sqlQuery || ""
+            });
+            console.log("✅ RAG execution with SerpAPI results completed successfully");
+            return result;
+          } catch (error) {
+            console.error("❌ Error executing SerpAPI query:", error);
+            // If there's an error with SerpAPI, fall back to just using RAG
+            console.log("⚠️ Falling back to RAG without SerpAPI results");
+            const result = await ragChain.invoke({
+              query: input.query,
+              sqlQuery: input.sqlQuery || ""
+            });
+            console.log("✅ RAG execution completed successfully");
+            return result;
+          }
+        } 
+        // If both SQL and SerpAPI queries are empty, bypass tool selection and go straight to RAG
+        else if (sqlQueryEmpty && serpApiQueryEmpty) {
           console.log("⏩ Bypassing tool selection, going straight to LLM with RAG");
           try {
             const result = await ragChain.invoke({
@@ -763,8 +806,8 @@ export const createAgentChain = (
             return `I encountered an error while processing your request: ${error}`;
           }
         } else {
-          // If either SQL or SerpAPI query is present, use the tool selection workflow
-          console.log("🔄 SQL or SerpAPI query is present, using tool selection workflow");
+          // If SQL query is present or SerpAPI key is not available, use the tool selection workflow
+          console.log("🔄 SQL query is present or SerpAPI key not available, using tool selection workflow");
           const toolSelectionChain = createToolSelectionWorkflow(model, sqlTool, serpApiKey, ragChain);
           return await toolSelectionChain.invoke(input);
         }
