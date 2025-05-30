@@ -646,6 +646,10 @@ export const createToolSelectionWorkflow = (
     /population.*(add|plus|sum|combined|total)/i,
     /population.*and.*population/i,
     
+    // Population comparison patterns
+    /population.*divided by.*population/i,
+    /population.*(compare|comparison|ratio|vs|versus).*population/i,
+    
     // Explicit requests for multiple steps
     /first.*then/i,
     /after that/i,
