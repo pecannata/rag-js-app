@@ -150,8 +150,6 @@ const processSqlQuery = async (
 // Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
 const SERP_API_QUERY = "";
 
-  // SQL processing functions moved to SQL Templates section above
-
 // We're removing the fetchSerpApiResults function since we're no longer making client-side SerpAPI calls
 // All tool selection and execution will happen on the server side through the ReACT agent
 
