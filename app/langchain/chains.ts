@@ -755,86 +755,141 @@ export const createAgentChain = (
       invoke: async (input) => {
         console.log("📝 Query:", input.query);
         
-        // Check conditions for direct tool usage
-        const sqlQueryEmpty = !input.sqlQuery || input.sqlQuery.trim() === '';
-        const serpApiQueryEmpty = !input.serpApiQuery || input.serpApiQuery.trim() === '';
-        const isCalculatorQuery = mightBeCalculatorQuery(input.query);
+        let toolUsed = {
+          sql: false,
+          serpApi: false,
+          calculator: false,
+          rag: false
+        };
         
-        // Use calculator tool directly if conditions are met
-        if (sqlQueryEmpty && serpApiQueryEmpty && !useMultiShotAI && isCalculatorQuery) {
-          console.log("🧮 Using calculator tool directly for mathematical query");
+        let processedResults = {
+          sql: null,
+          serpApi: null,
+          calculator: null
+        };
+        
+        // Log initial state of inputs
+        console.log("Tool selection conditions:", {
+          hasSqlQuery: !!(input.sqlQuery && input.sqlQuery.trim()),
+          hasSerpApiQuery: !!(input.serpApiQuery && input.serpApiQuery.trim()),
+          serpApiKeyAvailable: !!serpApiKey,
+          multiShotAIDisabled: !useMultiShotAI
+        });
+
+        // Step 1: Process SQL query first if present
+        if (input.sqlQuery && input.sqlQuery.trim() !== '') {
+          console.log("💾 Processing SQL query through RAG chain");
           try {
-            const calculatorTool = createCalculatorTool();
-            const result = await calculatorTool.invoke(input.query);
-            return `The calculation result is: ${result}`;
+            const sqlResult = await ragChain.invoke({
+              query: input.query,
+              sqlQuery: input.sqlQuery
+            });
+            toolUsed.sql = true;
+            toolUsed.rag = true;
+            processedResults.sql = sqlResult;
+            console.log("💾 SQL processing completed successfully");
+            return sqlResult; // Return SQL results immediately
           } catch (error) {
-            console.error("❌ Error using calculator tool:", error);
-            return `I encountered an error while performing the calculation: ${error}`;
+            console.error("❌ Error processing SQL query:", error);
+            // SQL processing failed, continue to next tool
           }
         }
         
-        // If SerpAPI query is not empty, execute it and append results to the query
-        if (!serpApiQueryEmpty && serpApiKey) {
-          console.log("🔍 SerpAPI query is not empty, executing and appending results to query");
+        // Step 2: Process SerpAPI if SQL was not used successfully
+        let serpApiResultString = '';
+        let serpApiProcessed = false;
+        if (!toolUsed.sql && input.serpApiQuery && input.serpApiQuery.trim() !== '' && serpApiKey) {
+          console.log("🔍 Processing SerpAPI query");
           try {
-            // Create a SerpAPI tool adapter for this query
             const serpApiTool = createSerpApiToolAdapter(serpApiKey);
-            
-            // Execute the SerpAPI query
-            console.log("🔍 Executing SerpAPI query:", input.serpApiQuery);
             const serpApiResult = await serpApiTool.invoke({ query: input.serpApiQuery });
-            console.log("🔍 SerpAPI query completed successfully");
-            
-            // Format the SerpAPI result as a string if it's not already
-            let serpApiResultString = "";
-            if (typeof serpApiResult === 'string') {
-              serpApiResultString = serpApiResult;
-            } else {
-              serpApiResultString = JSON.stringify(serpApiResult, null, 2);
-            }
-            
-            // Enhance the user query with the SerpAPI results
-            const enhancedQuery = `${input.query}\n\nHere is some relevant information from the web:\n${serpApiResultString}`;
-            console.log("🔍 Enhanced query with SerpAPI results");
-            
-            // Send the enhanced query to the RAG chain
-            const result = await ragChain.invoke({
-              query: enhancedQuery,
-              sqlQuery: input.sqlQuery || ""
-            });
-            console.log("✅ RAG execution with SerpAPI results completed successfully");
-            return result;
+            serpApiResultString = typeof serpApiResult === 'string' 
+              ? serpApiResult 
+              : JSON.stringify(serpApiResult, null, 2);
+            toolUsed.serpApi = true;
+            processedResults.serpApi = serpApiResultString;
+            serpApiProcessed = true;
           } catch (error) {
-            console.error("❌ Error executing SerpAPI query:", error);
-            // If there's an error with SerpAPI, fall back to just using RAG
-            console.log("⚠️ Falling back to RAG without SerpAPI results");
-            const result = await ragChain.invoke({
-              query: input.query,
-              sqlQuery: input.sqlQuery || ""
-            });
-            console.log("✅ RAG execution completed successfully");
-            return result;
+            console.error("❌ Error processing SerpAPI query:", error);
+            // SerpAPI processing failed, continue to next tool
           }
-        } 
-        // If both SQL and SerpAPI queries are empty, bypass tool selection and go straight to RAG
-        else if (sqlQueryEmpty && serpApiQueryEmpty) {
-console.log("Bypassing tool selection, going straight to LLM");
-          try {
-            const result = await ragChain.invoke({
-              query: input.query,
-              sqlQuery: input.sqlQuery || ""
+        }
+        
+        // Step 3: Only consider calculator if both SQL and SerpAPI were unsuccessful
+        if (!toolUsed.sql && !toolUsed.serpApi && !useMultiShotAI) {
+          const isCalculatorQuery = mightBeCalculatorQuery(input.query);
+          
+          if (isCalculatorQuery) {
+            console.log("🧮 Checking calculator eligibility after SQL and SerpAPI processing");
+            console.log("Calculator conditions:", {
+              sqlProcessed: input.sqlQuery && input.sqlQuery.trim() !== '',
+              sqlSuccessful: toolUsed.sql,
+              serpApiProcessed,
+              serpApiSuccessful: toolUsed.serpApi,
+              multiShotAIDisabled: !useMultiShotAI,
+              isCalculatorQuery
             });
-            console.log("✅ RAG execution completed successfully");
-            return result;
-          } catch (error) {
-            console.error("❌ Error invoking RAG chain:", error);
-            return `I encountered an error while processing your request: ${error}`;
+            
+            try {
+              const calculatorTool = createCalculatorTool();
+              const result = await calculatorTool.invoke(input.query);
+              toolUsed.calculator = true;
+              processedResults.calculator = result;
+              console.log("🧮 Calculator processing successful");
+              return `The calculation result is: ${result}`;
+            } catch (error) {
+              console.error("❌ Error using calculator tool:", error);
+              // Calculator processing failed, continue to RAG
+            }
+          } else {
+            console.log("📝 Query is not mathematical, proceeding to RAG");
           }
         } else {
-          // If SQL query is present or SerpAPI key is not available, use the tool selection workflow
-          console.log("🔄 SQL query is present or SerpAPI key not available, using tool selection workflow");
-          const toolSelectionChain = createToolSelectionWorkflow(model, sqlTool, serpApiKey, ragChain);
-          return await toolSelectionChain.invoke(input);
+          console.log("🚫 Skipping calculator check:", {
+            sqlUsed: toolUsed.sql,
+            serpApiUsed: toolUsed.serpApi,
+            multiShotAIEnabled: useMultiShotAI
+          });
+        }
+        
+        // Final step: Use RAG chain with any accumulated results
+        console.log("⚡ Using RAG chain", {
+          toolsUsed: toolUsed,
+          hasProcessedResults: {
+            sql: !!processedResults.sql,
+            serpApi: !!processedResults.serpApi,
+            calculator: !!processedResults.calculator
+          }
+        });
+        try {
+          let enhancedQuery = input.query;
+          
+          // Incorporate any SerpAPI results if available
+          if (toolUsed.serpApi && processedResults.serpApi) {
+            enhancedQuery = `${input.query}\n\nHere is some relevant information from the web:\n${processedResults.serpApi}`;
+            console.log("🔍 Enhanced query with SerpAPI results");
+          }
+          
+          // Execute RAG chain with empty SQL query since SQL was already processed if present
+          const result = await ragChain.invoke({
+            query: enhancedQuery,
+            sqlQuery: ""
+          });
+          
+          toolUsed.rag = true;
+          console.log("✅ RAG execution completed successfully", {
+            finalToolsUsed: toolUsed,
+            processedResults: {
+              sql: !!processedResults.sql,
+              serpApi: !!processedResults.serpApi,
+              calculator: !!processedResults.calculator
+            }
+          });
+          
+          return result;
+        } catch (error) {
+          console.error("❌ Error invoking RAG chain:", error);
+          return `I encountered an error while processing your request: ${error}`;
         }
       }
     };

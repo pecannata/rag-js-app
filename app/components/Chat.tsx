@@ -79,10 +79,10 @@ const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrgan
 
 // SQL query template - do not remove SQL_QUERY_TEMPLATE_VECTOR
 const SQL_QUERY_TEMPLATE_VECTOR = `
-            SELECT seg
-            FROM segs
-            ORDER BY vector_distance(vec, (SELECT vector_embedding(ALL_MINILM_L12_V2 using \' + {{USER_INPUT}} + \' as data)), COSINE)
-            FETCH FIRST 2 ROWS ONLY
+SELECT seg
+FROM segs
+ORDER BY vector_distance(vec, (SELECT vector_embedding(ALL_MINILM_L12_V2 using \' + {{USER_INPUT}} + \' as data)), COSINE)
+FETCH FIRST 2 ROWS ONLY
 `;
 
 // Possible queries
