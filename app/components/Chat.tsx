@@ -88,7 +88,6 @@ FETCH FIRST 2 ROWS ONLY
 // Possible queries
 // select * from emp
 const SQL_QUERY_TEMPLATE = `
-
 `;
 
 // Function to execute SQL query and return results
