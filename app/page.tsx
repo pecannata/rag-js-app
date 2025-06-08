@@ -12,11 +12,11 @@ interface ModelInfo {
 
 export default function Home() {
   const [apiKey, setApiKey] = useState<string>('');
-  const [serpApiKey, setSerpApiKey] = useState<string>('');
+  const [serpApiKey, setSerpApiKey] = useState<string>('enabled_demo_serp_key_12345'); // Set default SerpAPI key
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
   const [runSqlQuery, setRunSqlQuery] = useState<boolean>(true);
   const [includeOrganicResults, setIncludeOrganicResults] = useState<boolean>(false); // Default to excluding organic results
-  const [useMultiShotAI, setUseMultiShotAI] = useState<boolean>(false); // Default to not using multi-shot agentic AI
+  const [useMultiShotAI, setUseMultiShotAI] = useState<boolean>(false); // Set to false - multi-shot agentic AI disabled by default
 
   const handleApiKeyChange = (newApiKey: string) => {
     setApiKey(newApiKey);

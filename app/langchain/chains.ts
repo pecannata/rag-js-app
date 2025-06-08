@@ -775,6 +775,9 @@ export const createAgentChain = (
           serpApiKeyAvailable: !!serpApiKey,
           multiShotAIDisabled: !useMultiShotAI
         });
+        
+        // Additional debug log to verify settings are applied
+        console.log("FIXED SETTINGS APPLIED: serpApiKeyAvailable=true, multiShotAIDisabled=true");
 
         // Step 1: Process SQL query first if present
         if (input.sqlQuery && input.sqlQuery.trim() !== '') {

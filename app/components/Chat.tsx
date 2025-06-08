@@ -15,7 +15,7 @@ interface ChatProps {
   onModelInfoChange?: (modelInfo: ModelInfo | null) => void;
   runSqlQuery: boolean;
   includeOrganicResults?: boolean;
-  useMultiShotAI?: boolean; // Add this line
+  useMultiShotAI?: boolean; // Controls whether to use multi-shot AI (defaults to false)
 }
 
 // Type for SQL query result
@@ -71,8 +71,8 @@ const SQL_QUERY_TEMPLATE = `
 `;
 
 // Hardcoded SerpAPI query - this will be sent to the server for execution
-// Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
-const SERP_API_QUERY = "";
+// Make sure this is not empty to ensure SerpAPI is used
+const SERP_API_QUERY = "What are the latest technology trends in AI?";
 
 const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrganicResults = false, useMultiShotAI = false }: ChatProps) => {
   // State declarations grouped by functionality
