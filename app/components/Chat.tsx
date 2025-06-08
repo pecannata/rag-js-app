@@ -53,27 +53,6 @@ const mightBeCalculatorQuery = (query: string): boolean => {
   return calculatorPattern.test(query.replace(/\s/g, ''));
 };
 
-const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrganicResults = false, useMultiShotAI = false }: ChatProps) => {
-  // State declarations grouped by functionality
-  // UI states
-  const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-  // Loading states
-  const [isLoadingSql, setIsLoadingSql] = useState(false);
-  const [isLoadingLlm, setIsLoadingLlm] = useState(false);
-  const [isLoadingSerpApi, setIsLoadingSerpApi] = useState(false);
-  
-  // Data states
-  const [sqlResults, setSqlResults] = useState<SqlQueryResult | null>(null);
-  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
-
-  // Scroll to the bottom of the chat when messages update
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-  
 // SQL Templates and Processing
 // ---------------------------
 
@@ -90,6 +69,36 @@ FETCH FIRST 2 ROWS ONLY
 const SQL_QUERY_TEMPLATE = `
 
 `;
+
+// Hardcoded SerpAPI query - this will be sent to the server for execution
+// Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
+const SERP_API_QUERY = "";
+
+const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrganicResults = false, useMultiShotAI = false }: ChatProps) => {
+  // State declarations grouped by functionality
+  // UI states
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Loading states
+  const [isLoadingSql, setIsLoadingSql] = useState(false);
+  const [isLoadingLlm, setIsLoadingLlm] = useState(false);
+  const [isLoadingSerpApi, setIsLoadingSerpApi] = useState(false);
+  
+  // Data states
+  const [sqlResults, setSqlResults] = useState<SqlQueryResult | null>(null);
+  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  
+  // Flag states - moved out of handleSubmit for access in the JSX
+  const [hasSqlQuery] = useState<boolean>(SQL_QUERY_TEMPLATE.trim() !== '');
+  const [hasSerpApiQuery] = useState<boolean>(SERP_API_QUERY.trim() !== '');
+
+  // Scroll to the bottom of the chat when messages update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
 
 // Function to execute SQL query and return results
 const fetchSqlResults = async (userInput: string): Promise<SqlQueryResult> => {
@@ -146,9 +155,6 @@ const processSqlQuery = async (
   return enhancedMessage;
 };
 
-// Hardcoded SerpAPI query - this will be sent to the server for execution
-// Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
-const SERP_API_QUERY = "";
 
 // We're removing the fetchSerpApiResults function since we're no longer making client-side SerpAPI calls
 // All tool selection and execution will happen on the server side through the ReACT agent
@@ -166,18 +172,18 @@ const SERP_API_QUERY = "";
     setInput(''); // Clear input field
     
     try {
-      const hasSqlQuery = SQL_QUERY_TEMPLATE.trim() !== '';
-      const hasSerpQuery = SERP_API_QUERY.trim() !== '';
+      // Note: hasSqlQuery and hasSerpApiQuery are now in state at the component level
+      // so they're accessible throughout the component
       
       // Determine if we should bypass tool selection and go directly to LLM
       const shouldUseDirectLlm = 
         !hasSqlQuery && 
-        !hasSerpQuery && 
+        !hasSerpApiQuery && 
         !useMultiShotAI && 
         !mightBeCalculatorQuery(userMessage.content);
       
       // Update SerpAPI loading state
-      const mightUseSerpApi = serpApiKey && hasSerpQuery;
+      const mightUseSerpApi = serpApiKey && hasSerpApiQuery;
       if (mightUseSerpApi) {
         console.log("Query might use SerpAPI, showing loading indicator");
         setIsLoadingSerpApi(true);
@@ -363,7 +369,7 @@ const SERP_API_QUERY = "";
             </div>
           )}
           
-          {isLoadingSerpApi && serpApiKey && hasSerpQuery && !(hasSqlQuery && !hasSerpQuery) && (
+          {isLoadingSerpApi && serpApiKey && hasSerpApiQuery && !(hasSqlQuery && !hasSerpApiQuery) && (
             <div className="flex justify-start">
               <div className="bg-green-100 text-green-800 rounded-lg px-4 py-2 max-w-md">
                 <div className="flex items-center mb-1">
