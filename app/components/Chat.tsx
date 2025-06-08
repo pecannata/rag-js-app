@@ -70,9 +70,8 @@ const SQL_QUERY_TEMPLATE = `
 
 `;
 
-// Hardcoded SerpAPI query - this will be sent to the server for execution
-// Make sure this is not empty to ensure SerpAPI is used
-const SERP_API_QUERY = "What are the latest technology trends in AI?";
+// Hardcoded SerpAPI query - Can you provide the number of wins and losses for each of the top four MLB teams so far this year?
+const SERP_API_QUERY = "";
 
 const Chat = ({ apiKey, serpApiKey, onModelInfoChange, runSqlQuery, includeOrganicResults = false, useMultiShotAI = false }: ChatProps) => {
   // State declarations grouped by functionality

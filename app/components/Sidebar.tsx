@@ -28,7 +28,7 @@ const Sidebar = ({
   onRunSqlQueryChange,
   includeOrganicResults = false, 
   onIncludeOrganicResultsChange,
-  useMultiShotAI = false,
+  useMultiShotAI = false, // Multi-shot AI disabled by default
   onUseMultiShotAIChange
 }: SidebarProps) => {
   // Cohere API key state
